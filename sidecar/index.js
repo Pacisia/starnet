@@ -17553,7 +17553,7 @@ async function runOnceCore(o) {
         try { fs.mkdirSync(ccCwd, { recursive: true }); } catch (e) { failNote('claude-code.cwd', e); }
       }
       result = await ClaudeCodeEngine.runClaudeCodeEngine({
-        agentId, runId, trigger, model, messages: msgs, emit: loopEmit, signal, cwd: ccCwd,
+        agentId, runId, trigger, model, reasoningEffort, messages: msgs, emit: loopEmit, signal, cwd: ccCwd,
         tools: o.outputOnly ? [] : toolDefs.concat(deferredToolDefs),
         dispatch: (c) => dispatch(c, capCtx),
         prompt: typeof prompt === 'function' ? prompt : null,

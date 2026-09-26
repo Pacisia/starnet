@@ -125,9 +125,21 @@ function authStatus(deps) {
 }
 
 /* ---------- argv ---------- */
+
+// StarNet's Reasoning setting -> `claude --effort`. The CLI takes low|medium|high|xhigh|max; StarNet's
+// "off"/"minimal" have no CLI equivalent, so they map to the lowest real level (low). Unknown/empty = no flag,
+// which leaves the CLI on its own default.
+const CLI_EFFORTS = { off: 'low', none: 'low', minimal: 'low', low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' };
+function cliEffort(v) {
+  const k = String(v || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
+  return CLI_EFFORTS[k] || null;
+}
+
 function buildArgs(o) {
   const a = ['-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages'];
   if (o.model && o.model !== 'default') a.push('--model', o.model);
+  const effort = cliEffort(o.reasoningEffort);
+  if (effort) a.push('--effort', effort);
   if (o.systemFile) a.push('--append-system-prompt-file', o.systemFile);
   if (o.mcpConfigFile) a.push('--mcp-config', o.mcpConfigFile);
   if (o.permissionTool) a.push('--permission-prompt-tool', o.permissionTool);
@@ -487,7 +499,7 @@ async function runClaudeCodeEngine(o) {
     const mcpFile = writeTemp(tmp, 'mcp.json', JSON.stringify(mcpConfig({ port: bridge.port, secret: bridge.secret, shim, node: o.node })));
     const systemFile = parts.system ? writeTemp(tmp, 'system.md', parts.system) : null;
     const args = buildArgs({
-      model, systemFile, mcpConfigFile: mcpFile, permissionTool: PERMISSION_TOOL,
+      model, reasoningEffort: o.reasoningEffort, systemFile, mcpConfigFile: mcpFile, permissionTool: PERMISSION_TOOL,
       resumeId, sessionId, noPersist: !o.streamId, addDirs: o.addDirs
     });
     const mapper = makeStreamMapper({ emit, agentId, runId });
@@ -548,7 +560,7 @@ function makeClaudeCodeProvider(opts) {
       const mapper = makeStreamMapper({ agentId: 'aux', runId: 'aux', emit: (name, p) => { if (name === 'agent.token') push({ type: 'text', delta: p.delta }); } });
       try {
         const systemFile = parts.system ? writeTemp(tmp, 'system.md', parts.system) : null;
-        const args = buildArgs({ model: req.model, systemFile, textOnly: true, noPersist: true });
+        const args = buildArgs({ model: req.model, reasoningEffort: req.reasoningEffort, systemFile, textOnly: true, noPersist: true });
         const p = runCli({ bin, args, cwd: tmp, env: cleanEnv(process.env, bin), signal: req.signal, stdin: composePrompt(parts, false), onLine: mapper.line, spawn: opts.spawn })
           .then(() => { finished = true; push(null); });
         while (true) {
@@ -569,5 +581,5 @@ function makeClaudeCodeProvider(opts) {
 module.exports = {
   ENGINE_ID, MODELS, PERMISSION_TOOL, MCP_SERVER_NAME, APPROVE_TOOL, DUPLICATE_TOOL,
   resolveClaudeBinary, authStatus, buildArgs, makeStreamMapper, splitConversation, composePrompt,
-  makeSessionStore, startToolBridge, makeApprover, runClaudeCodeEngine, makeClaudeCodeProvider, cleanEnv, mcpConfig
+  makeSessionStore, startToolBridge, makeApprover, runClaudeCodeEngine, makeClaudeCodeProvider, cleanEnv, mcpConfig, cliEffort
 };
