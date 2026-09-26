@@ -95,8 +95,8 @@
       supportsReasoning: true,
       staticModels: [
         { id: 'default', name: 'Claude Code default', context_length: 200000, supportsTools: true, supportsReasoning: true },
-        { id: 'fable', name: 'Fable (latest)', context_length: 200000, supportsTools: true, supportsReasoning: true },
-        { id: 'opus', name: 'Opus (latest)', context_length: 200000, supportsTools: true, supportsReasoning: true },
+        { id: 'claude-fable-5-1', name: 'Fable 5.1', context_length: 200000, supportsTools: true, supportsReasoning: true },
+        { id: 'claude-opus-5-5', name: 'Opus 5.5', context_length: 200000, supportsTools: true, supportsReasoning: true },
         { id: 'sonnet', name: 'Sonnet (latest)', context_length: 200000, supportsTools: true, supportsReasoning: true },
         { id: 'haiku', name: 'Haiku (latest)', context_length: 200000, supportsTools: true, supportsReasoning: true }
       ],
