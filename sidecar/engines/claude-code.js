@@ -50,6 +50,7 @@ const MODELS = [
 const DUPLICATE_TOOL = /^(fs|shell|terminal|code|todo|notebook|lsp)[._]|^web[._](fetch|search|request)$|^webreader[._]/;
 
 /* ---------- binary discovery ---------- */
+function listDir(dir) { try { return fs.readdirSync(dir); } catch (err) { return []; } }   // absent dir = nothing to add
 function candidatePaths(env, home) {
   const out = [];
   if (env.STARNET_CLAUDE_BIN) out.push(env.STARNET_CLAUDE_BIN);
@@ -60,18 +61,46 @@ function candidatePaths(env, home) {
     path.join(home, '.claude', 'local', exe),
     path.join(home, '.npm-global', 'bin', exe),
     path.join(home, '.bun', 'bin', exe),
+    path.join(home, '.volta', 'bin', exe),
+    path.join(home, '.asdf', 'shims', exe),
+    path.join(home, 'Library', 'pnpm', exe),
+    path.join(home, '.local', 'share', 'pnpm', exe),
+    path.join(home, 'n', 'bin', exe),
     '/opt/homebrew/bin/claude',
     '/usr/local/bin/claude',
     '/usr/bin/claude'
   );
+  // Version managers keep one bin dir per Node version (nvm, fnm). A Mac app launched from the Dock never
+  // sees the shell PATH that points into them, so look inside directly, newest version first.
+  const nvm = path.join(home, '.nvm', 'versions', 'node');
+  for (const v of listDir(nvm).sort().reverse()) out.push(path.join(nvm, v, 'bin', exe));
+  for (const base of [path.join(home, 'Library', 'Application Support', 'fnm', 'node-versions'), path.join(home, '.local', 'share', 'fnm', 'node-versions'), path.join(home, '.fnm', 'node-versions')]) {
+    for (const v of listDir(base).sort().reverse()) out.push(path.join(base, v, 'installation', 'bin', exe));
+  }
   return out;
+}
+// Last resort: ask the Commander's own login shell where `claude` is (covers any PATH setup in .zshrc etc.).
+// Run once per process and cached; a GUI app has no other way to learn the interactive shell's PATH.
+let shellLookup;
+function loginShellClaude(deps) {
+  if (shellLookup !== undefined && !deps.noCache) return shellLookup;
+  shellLookup = null;
+  if (process.platform === 'win32' || deps.noShell) return shellLookup;
+  try {
+    const shell = (deps.env || process.env).SHELL || '/bin/zsh';
+    const outp = String((deps.execFileSync || childProcess.execFileSync)(shell, ['-ilc', 'command -v claude'], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }) || '');
+    const line = outp.split('\n').map(x => x.trim()).filter(x => x.startsWith('/')).pop();
+    if (line) shellLookup = line;
+  } catch (err) { failNote('claude-code.shell', err); }
+  return shellLookup;
 }
 function resolveClaudeBinary(deps) {
   deps = deps || {};
   const env = deps.env || process.env;
-  const exists = deps.exists || ((p) => { try { fs.accessSync(p, fs.constants.X_OK); return fs.statSync(p).isFile(); } catch (_) { return false; } });
+  const exists = deps.exists || ((p) => { try { fs.accessSync(p, fs.constants.X_OK); return fs.statSync(p).isFile(); } catch (err) { return false; } });   // missing = not this candidate
   for (const p of candidatePaths(env, deps.home || os.homedir())) if (exists(p)) return p;
-  return null;
+  const viaShell = loginShellClaude(deps);
+  return viaShell && exists(viaShell) ? viaShell : null;
 }
 
 /* ---------- sign-in status (read-only; `claude auth status` prints JSON) ---------- */
@@ -83,7 +112,7 @@ function authStatus(deps) {
   const bin = deps.bin || resolveClaudeBinary(deps);
   if (!bin) return Promise.resolve({ installed: false, connected: false, bin: null, reason: 'Claude Code not found. Install it, then run `claude` in Terminal to sign in.' });
   return new Promise((resolve) => {
-    (deps.execFile || childProcess.execFile)(bin, ['auth', 'status'], { timeout: 15000, env: cleanEnv(process.env) }, (err, stdout) => {
+    (deps.execFile || childProcess.execFile)(bin, ['auth', 'status'], { timeout: 15000, env: cleanEnv(process.env, bin) }, (err, stdout) => {
       let j = null;
       try { j = JSON.parse(String(stdout || '').trim()); } catch (err) { failNote('claude-code.engine', err); }
       const value = j
@@ -371,11 +400,15 @@ function writeTemp(dir, name, body) {
   return p;
 }
 
-function cleanEnv(env) {
+function cleanEnv(env, bin) {
   // The CLI must authenticate with the Commander's own `claude login`, never with a key StarNet happens to hold.
   const e = Object.assign({}, env);
   for (const k of Object.keys(e)) if (/^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|CLAUDE_CODE_OAUTH_TOKEN|STARNET_API_TOKEN|SKYNET_API_TOKEN|STARNET_TOKEN)$/.test(k)) delete e[k];
-  if (!e.PATH || !/homebrew|\.local\/bin/.test(e.PATH)) e.PATH = [e.PATH, '/opt/homebrew/bin', '/usr/local/bin', path.join(os.homedir(), '.local', 'bin')].filter(Boolean).join(path.delimiter);
+  // An npm-installed `claude` is a node script (#!/usr/bin/env node): put its own bin dir (where nvm/fnm keep
+  // node too) first on PATH, then the usual Homebrew/local dirs a Dock-launched app is missing.
+  const extra = [bin ? path.dirname(bin) : '', '/opt/homebrew/bin', '/usr/local/bin', path.join(os.homedir(), '.local', 'bin')].filter(Boolean);
+  const have = String(e.PATH || '').split(path.delimiter).filter(Boolean);
+  e.PATH = extra.filter(d => have.indexOf(d) < 0).concat(have).join(path.delimiter);
   return e;
 }
 
@@ -459,7 +492,7 @@ async function runClaudeCodeEngine(o) {
     });
     const mapper = makeStreamMapper({ emit, agentId, runId });
     const proc = await runCli({
-      bin, args, cwd: o.cwd || process.cwd(), env: cleanEnv(o.env || process.env), signal: o.signal,
+      bin, args, cwd: o.cwd || process.cwd(), env: cleanEnv(o.env || process.env, bin), signal: o.signal,
       stdin: composePrompt(parts, !!resumeId), onLine: mapper.line, spawn: o.spawn
     });
     const r = mapper.finish();
@@ -516,7 +549,7 @@ function makeClaudeCodeProvider(opts) {
       try {
         const systemFile = parts.system ? writeTemp(tmp, 'system.md', parts.system) : null;
         const args = buildArgs({ model: req.model, systemFile, textOnly: true, noPersist: true });
-        const p = runCli({ bin, args, cwd: tmp, env: cleanEnv(process.env), signal: req.signal, stdin: composePrompt(parts, false), onLine: mapper.line, spawn: opts.spawn })
+        const p = runCli({ bin, args, cwd: tmp, env: cleanEnv(process.env, bin), signal: req.signal, stdin: composePrompt(parts, false), onLine: mapper.line, spawn: opts.spawn })
           .then(() => { finished = true; push(null); });
         while (true) {
           if (!queue.length) { if (finished) break; await new Promise(r => { wake = r; }); continue; }

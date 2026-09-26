@@ -35,7 +35,11 @@ const { validate } = (() => { try { return require('../shared/events.js'); } cat
   /* ---- binary discovery ---- */
   A.eq(E.resolveClaudeBinary({ env: { PATH: '' }, home: '/home/u', exists: p => p === '/home/u/.local/bin/claude' }), '/home/u/.local/bin/claude', 'finds ~/.local/bin/claude without PATH');
   A.eq(E.resolveClaudeBinary({ env: { PATH: '', STARNET_CLAUDE_BIN: '/x/claude' }, home: '/h', exists: p => p === '/x/claude' }), '/x/claude', 'STARNET_CLAUDE_BIN override');
-  A.eq(E.resolveClaudeBinary({ env: { PATH: '' }, home: '/h', exists: () => false }), null, 'null when absent');
+  A.eq(E.resolveClaudeBinary({ env: { PATH: '' }, home: '/h', exists: () => false, noShell: true, noCache: true }), null, 'null when absent');
+  A.eq(E.resolveClaudeBinary({ env: { PATH: '' }, home: '/h', exists: p => p === '/usr/local/claude-real', noCache: true,
+    execFileSync: () => 'noise from .zshrc\n/usr/local/claude-real\n' }), '/usr/local/claude-real', 'login-shell lookup finds a PATH-only install');
+  const envNvm = E.cleanEnv({ PATH: '/usr/bin' }, '/Users/u/.nvm/versions/node/v22.1.0/bin/claude');
+  A.ok(envNvm.PATH.split(require('path').delimiter)[0] === '/Users/u/.nvm/versions/node/v22.1.0/bin', "claude's own bin dir (its node) leads PATH");
 
   /* ---- conversation ---- */
   const parts = E.splitConversation([
