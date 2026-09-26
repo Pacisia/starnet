@@ -1488,7 +1488,7 @@ const App = (() => {
 
   /* ---------- connect screen ---------- */
   const FALLBACK_MODELS = Object.freeze({
-    'claude-code': ['default', 'opus', 'sonnet', 'haiku'],   // CLI aliases; 'default' = whatever your claude CLI uses
+    'claude-code': ['default', 'fable', 'opus', 'sonnet', 'haiku'],   // CLI aliases; 'default' = whatever your claude CLI uses
     // grok/kimi mirror the sidecar registry's staticModels (the OAuth catalogs are account-discovered live;
     // these are only the offline/not-signed-in fallback so the field is never stranded empty).
     grok: ['grok-4', 'grok-3', 'grok-code-fast-1'],
