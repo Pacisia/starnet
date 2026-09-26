@@ -184,6 +184,11 @@
         reasoningEffort: opts.reasoningEffort
       });
     }
+    if (profile.adapter === 'claude-code') {
+      // Node-only: runs the official `claude` CLI under the Commander's own login. Never loaded in the browser.
+      if (typeof require !== 'function') throw new Error('Claude Code engine runs in the sidecar only');
+      return require('../engines/claude-code.js').makeClaudeCodeProvider({ bin: opts.claudeBin });
+    }
     throw new Error('provider adapter is not wired: ' + profile.adapter);
   }
 
@@ -195,6 +200,7 @@
     normalizeProviderId: registry.normalizeProviderId,
     providerUsesCodex: registry.providerUsesCodex,
     providerUsesDeviceOAuth: registry.providerUsesDeviceOAuth,
+    providerUsesClaudeCode: registry.providerUsesClaudeCode,
     defaultReasoningEffortForProvider: registry.defaultReasoningEffortForProvider,
     providerRequiresKey: registry.providerRequiresKey,
     providerRequiresBaseUrl: registry.providerRequiresBaseUrl,

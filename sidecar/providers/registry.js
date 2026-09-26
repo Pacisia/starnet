@@ -73,6 +73,35 @@
       order: 10
     },
     {
+      // CLAUDE CODE — the official `claude` CLI as the agent's engine, signed in once by the Commander with
+      // `claude login` on this computer. StarNet spawns the unmodified binary and never touches the Claude
+      // credential; runs are billed to the Commander's own Claude plan. See sidecar/engines/claude-code.js.
+      id: 'claude-code',
+      aliases: ['claudecode', 'claude-cli'],
+      name: 'Claude Code',
+      label: 'CLAUDE CODE',
+      endpoint: 'Claude Code CLI, your Claude plan',
+      blurb: 'uses your `claude` login, no API key',
+      live: true,
+      adapter: 'claude-code',
+      apiMode: 'claude_code_cli',
+      authType: 'cli',
+      keyRequired: false,
+      modelsRequireAuth: false,
+      defaultReasoningEffort: 'medium',
+      unmetered: true,
+      credentialPool: false,
+      supportsTools: true,
+      supportsReasoning: true,
+      staticModels: [
+        { id: 'default', name: 'Claude Code default', context_length: 200000, supportsTools: true, supportsReasoning: true },
+        { id: 'opus', name: 'Opus (latest)', context_length: 200000, supportsTools: true, supportsReasoning: true },
+        { id: 'sonnet', name: 'Sonnet (latest)', context_length: 200000, supportsTools: true, supportsReasoning: true },
+        { id: 'haiku', name: 'Haiku (latest)', context_length: 200000, supportsTools: true, supportsReasoning: true }
+      ],
+      order: 9
+    },
+    {
       // GROK OAUTH — Grok on a SuperGrok / X Premium+ subscription via the RFC 8628 device-code flow (no API
       // key). Inference is OpenAI-compatible at api.x.ai/v1 with the OAuth access token riding in AS the Bearer
       // key. Separate id from the API-key 'xai' profile above (same wire, different auth), like codex vs openai.
@@ -566,6 +595,10 @@
     if (profile) return profile.id;
     return fallback == null ? '' : String(fallback);
   }
+  function providerUsesClaudeCode(value) {
+    const profile = getProviderProfile(value);
+    return !!(profile && profile.adapter === 'claude-code');
+  }
   function providerUsesCodex(value) {
     return normalizeProviderId(value, '') === 'codex';
   }
@@ -631,6 +664,7 @@
     normalizeProviderId,
     providerUsesCodex,
     providerUsesDeviceOAuth,
+    providerUsesClaudeCode,
     defaultReasoningEffortForProvider,
     providerRequiresKey,
     providerRequiresBaseUrl,

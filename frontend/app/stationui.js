@@ -4106,6 +4106,9 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
     // to DISAPPEAR — see creditsProviderState() — because offering it on a station with no cloud configured
     // would advertise an account the user cannot create.
     { id: 'starnet',       name: 'STARNET MANAGED',   endpoint: 'managed inference · credits', blurb: 'no API key — runs on your balance', live: true, credits: true },
+    // CLAUDE CODE: the official `claude` CLI as the engine, on the Commander's own Claude plan. No key and no
+    // sign-in here: the login lives in the CLI (`claude` in a terminal). The card only reports what the CLI says.
+    { id: 'claude-code',   name: 'CLAUDE CODE',       endpoint: 'local claude CLI · your Claude plan', blurb: 'no API key — uses your claude login', live: true, cli: true },
     { id: 'openrouter',    name: 'OPENROUTER',        endpoint: 'openrouter.ai/api/v1',      blurb: 'one key · 300+ models',  live: true },
     { id: 'codex',         name: 'CHATGPT (CODEX)',   endpoint: 'OAuth · ChatGPT subscription', blurb: 'sign-in, no API key',  live: true },
     { id: 'grok',          name: 'GROK (XAI)',        endpoint: 'OAuth · SuperGrok / X Premium+', blurb: 'sign-in, no API key', live: true },
@@ -4180,6 +4183,38 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
   // is a fixed part of the product and must stay visible whether or not it is configured.
   function visibleProviders() {
     return PROVIDERS.filter(p => !p.credits || creditsProv.state !== 'absent');
+  }
+  // Claude Code CLI readiness, from GET /api/auth/claude-code/status (the CLI's own `claude auth status`).
+  let ccStatus = null;   // { installed, connected, reason }
+  function refreshClaudeCodeStatus(force) {
+    return Harness.api.get('/api/auth/claude-code/status' + (force ? '?refresh=1' : '')).catch(() => ({ installed: false, connected: false, reason: 'status unavailable' }))
+      .then(j => {
+        ccStatus = j || { installed: false, connected: false };
+        const h = H();
+        if (h && h.setDesktopConfigured) h.setDesktopConfigured('claude-code', !!ccStatus.connected);
+        if (typeof ModelDock !== 'undefined' && ModelDock.reflect) ModelDock.reflect();
+        return ccStatus;
+      });
+  }
+  function claudeCodeProviderCard(p, pi, active) {
+    const st = ccStatus;
+    const ok = !!(st && st.connected);
+    const runnable = !!(ok && p.id === active && H() && H().getModel && H().getModel());
+    const cls = ok ? 'conn' : 'avail';
+    const stat = !st ? '◐ CHECKING…' : ok ? '● SIGNED IN (CLAUDE CODE)' : st.installed ? '○ CLI FOUND · NOT SIGNED IN' : '○ CLAUDE CODE NOT FOUND';
+    const hint = !st || ok ? '' : (st.installed ? 'Open Terminal and run: claude  (then sign in with your Claude account)' : 'Install Claude Code, run claude once in Terminal to sign in, then press RECHECK.');
+    return '<div class="prov-card ' + cls + '" data-provider="' + esc(p.id) + '" role="group" aria-label="' + esc(p.name) + ' provider" style="--ci:' + pi + '">' +
+      '<button class="prov-select" data-act="prov-select" aria-label="Select ' + esc(p.name) + ' provider">' +
+        providerLogoHtml(p.id) +
+        '<span class="prov-main">' +
+          '<span class="prov-name">' + esc(p.name) + (runnable ? '<span class="prov-badge">ACTIVE</span>' : '') + '</span>' +
+          '<span class="prov-ep">' + esc(p.endpoint) + ' · ' + esc(p.blurb) + '</span>' +
+          (hint ? '<span class="prov-ep dim">' + esc(hint) + '</span>' : '') +
+        '</span>' +
+      '</button>' +
+      '<span class="prov-stat"><span class="prov-stat-t">' + stat + '</span></span>' +
+      '<button class="bb sm prov-addkey" data-act="cc-recheck" data-provider="' + esc(p.id) + '" title="ask the claude CLI again whether it is signed in">↻ RECHECK</button>' +
+      '</div>';
   }
   function activeProv() { const h = H(); return (h && h.getProv && h.getProv()) || 'openrouter'; }
   let codexStatusKnown = null;        // last /api/auth/codex/status truth: { connected, expired, reason }
@@ -4385,7 +4420,7 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
   }
 
   function providerLogoHtml(id) {
-    const asset = id === 'starnet' ? 'starnet-wordmark.svg' : 'providers/' + (id === 'codex' ? 'openai' : id) + '.svg';
+    const asset = id === 'starnet' ? 'starnet-wordmark.svg' : 'providers/' + (id === 'codex' ? 'openai' : id === 'claude-code' ? 'anthropic' : id) + '.svg';
     return '<span class="prov-logo' + (id === 'starnet' ? ' prov-logo-starnet' : '') + '" aria-hidden="true" style="--provider-icon:url(&quot;' + esc(new URL('assets/brand/' + asset, document.baseURI).href) + '&quot;)"></span>';
   }
 
@@ -4396,6 +4431,7 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
       // states the BALANCE, because a paid provider reading "connected" at $0.00 would be a lie of
       // exactly the kind this panel exists to avoid.
       if (p.credits) return creditsProviderCard(p, pi, active);
+      if (p.cli) return claudeCodeProviderCard(p, pi, active);
       const ks = keysFor(p.id);
       // a keyless device-code sign-in (codex/grok/kimi) can be KNOWN-dead (sidecar recorded a consumed/invalid
       // refresh token) — that must never render as SIGNED IN. The row still exists (ks has the expired entry) so
@@ -6389,6 +6425,12 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
       refreshCreditsProvider().then(() => {
         if (was !== creditsProv.state + ':' + creditsProv.balanceUsd + ':' + creditsProv.tier) rerender('settings');
       }).catch(() => {});
+    })();
+    (() => {
+      const was = JSON.stringify(ccStatus);
+      refreshClaudeCodeStatus(false).then(() => { if (was !== JSON.stringify(ccStatus)) rerender('settings'); }).catch(() => {});
+      const btn = host.querySelector('[data-act="cc-recheck"]');
+      if (btn) btn.addEventListener('click', (ev) => { ev.stopPropagation(); sfx('click'); refreshClaudeCodeStatus(true).then(() => rerender('settings')); });
     })();
     wireCredits(host);
     wireBudget(host);

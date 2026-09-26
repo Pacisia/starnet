@@ -231,6 +231,7 @@ const Harness = (() => {
     // they are configured identically in a browser build and a packaged one. Probing after the return would
     // leave configured('starnet') false forever anywhere that isn't Tauri — including every dev session.
     await refreshCreditsConfigured();
+    await probeClaudeCode();   // CLI login lives outside the keychain, same as credits: probe in every build
     if (!DESKTOP) return;
     let loaded = false;
     try {
@@ -267,6 +268,14 @@ const Harness = (() => {
         if (r && r.ok) { const j = await r.json(); if (j && j.connected) _configuredByProvider[pid] = true; }
       } catch (_) {}
     }));
+    await probeClaudeCode();   // the keychain sweep above rebuilt the map; re-assert the CLI truth
+  }
+  // CLAUDE CODE: the `claude` CLI holds its own login; ask the sidecar whether it is installed + signed in.
+  async function probeClaudeCode() {
+    try {
+      const r = await fetch('/api/auth/claude-code/status');
+      if (r && r.ok) { const j = await r.json(); _configuredByProvider['claude-code'] = !!(j && j.connected); }
+    } catch (_) {}
   }
   // Whether this station can run on managed credits. The bearer is the linked device token the SIDECAR
   // holds — there is nothing on this side to inspect, so we ask, exactly as codex/grok/kimi do. Fail-open:
@@ -292,6 +301,7 @@ const Harness = (() => {
     const p = String(provider || getProv() || 'openrouter').trim().toLowerCase();
     if (p === 'codex' || p === 'openai-codex') return 'codex';
     if (p === 'openai' || p === 'openai-api') return 'openai';
+    if (p === 'claude-code' || p === 'claudecode' || p === 'claude-cli') return 'claude-code';   // Claude Code CLI engine (NOT the Anthropic API key provider)
     if (p === 'anthropic' || p === 'claude') return 'anthropic';
     if (p === 'gemini' || p === 'google' || p === 'google-ai' || p === 'google-gemini') return 'gemini';
     // grok/kimi are their OWN keyless OAuth (subscription) providers — NOT aliases for the API-key
@@ -338,7 +348,7 @@ const Harness = (() => {
     const p = normalizeProviderId(provider);
     // codex/grok/kimi authenticate by device-code OAuth tokens held sidecar-side; ollama/custom are keyless
     // endpoints; starnet's bearer is the linked device token, which the user never sees, let alone pastes.
-    return p !== 'codex' && p !== 'grok' && p !== 'kimi' && p !== 'ollama' && p !== 'custom' && p !== 'starnet';
+    return p !== 'codex' && p !== 'grok' && p !== 'kimi' && p !== 'ollama' && p !== 'custom' && p !== 'starnet' && p !== 'claude-code';
   }
   function configured(provider) {
     const p = normalizeProviderId(provider);
@@ -348,6 +358,7 @@ const Harness = (() => {
     // through to the keyless branch below, which would answer "configured" for every station simply because
     // there is no key to look for, and claim a station can run on credits it has never been linked to.
     if (p === 'starnet') return !!_configuredByProvider.starnet;
+    if (p === 'claude-code') return !!_configuredByProvider['claude-code'] || getProv() === 'claude-code';   // `claude` CLI signed in (boot probe)
     return DESKTOP ? !!(_configuredByProvider[p] || (p === 'openrouter' && _configured)) : (DEVMODE || !providerNeedsKey(p) || !!getKey(p));
   }
 
@@ -366,6 +377,7 @@ const Harness = (() => {
     // grok/kimi mirror codex: OAuth tokens live sidecar-side, so the desktop configured map (fed by the boot
     // probe + app.js's status refresh) is the only local truth; in the browser the active-provider pick stands in.
     if (p === 'grok' || p === 'kimi') return DESKTOP ? !!_configuredByProvider[p] : (getProv() === p);
+    if (p === 'claude-code') return !!_configuredByProvider[p];   // the CLI's own login; StarNet stores nothing
     if (p === 'ollama') return false;                      // an endpoint is configuration, never a credential
     if (p === 'custom' && !getKey(p)) return false;        // a keyless custom endpoint must not manufacture a key row
     if (DESKTOP) return !!(_configuredByProvider[p] || (p === 'openrouter' && _configured));

@@ -31,7 +31,7 @@ const KeyCTA = (() => {
   function providerNeedsKey(p) {
     p = normProv(p);
     // codex/grok/kimi are keyless OAuth sign-ins; ollama/custom are keyless-by-design endpoints.
-    return p !== 'codex' && p !== 'grok' && p !== 'kimi' && p !== 'ollama' && p !== 'custom';
+    return p !== 'codex' && p !== 'grok' && p !== 'kimi' && p !== 'ollama' && p !== 'custom' && p !== 'claude-code';
   }
   function activeProvider() {
     return normProv((typeof Harness !== 'undefined' && Harness.getProv) ? Harness.getProv() : 'openrouter');

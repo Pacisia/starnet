@@ -104,6 +104,7 @@ const { starnetManual } = require('./manual.js');   // truthful "how StarNet wor
 const FinishLine = require('./finish-line.js');     // immutable "crawl to the finish line" task doctrine at the final prompt seam
 const { makeHarnessSnapshot } = require('./harness-snapshot.js');   // bounded secret-free build/scheduler/connectors/diagnostics truth for station.inspect
 const { makeOpenRouterProvider } = require('./providers/openrouter.js');
+const ClaudeCodeEngine = require('./engines/claude-code.js');   // Claude Code CLI as an agent engine (Commander's own `claude login`)
 const edgetts = require('./edgetts.js');   // V-EDGE: free keyless neural TTS floor (decoupled from the LLM provider)
 const localVoice = require('./local-voice.js');
 const { makeMediaService } = require('./media-service.js');
@@ -114,6 +115,7 @@ const {
   normalizeProviderId: normalizeProviderIdFromRegistry,
   providerUsesCodex: registryProviderUsesCodex,
   providerUsesDeviceOAuth: registryProviderUsesDeviceOAuth,
+  providerUsesClaudeCode: registryProviderUsesClaudeCode,
   defaultReasoningEffortForProvider: registryDefaultReasoningEffort,
   providerRequiresKey,
   providerRequiresBaseUrl,
@@ -901,6 +903,7 @@ function rotateJsonl(file) { try { rotateIfLarge({ fs: fs }, file, LOG_MAX_BYTES
    unintended headroom after restart. The budget governs the soft cross-run pools; the host injects the wall clock
    at this composition boundary. */
 const LEDGER_FILE = path.join(WORKSPACES, 'ledger.jsonl');
+const claudeCodeSessions = ClaudeCodeEngine.makeSessionStore(path.join(WORKSPACES, 'claude-code.sessions.json'));
 const SPEND_PENDING_DIR = path.join(WORKSPACES, '.spend-pending');
 function spendPendingPath(runId) { return path.join(SPEND_PENDING_DIR, crypto.createHash('sha256').update(String(runId)).digest('hex') + '.json'); }
 let ledgerAppendFails = 0;                 // consecutive ledger append failures; reset on any success
@@ -2137,6 +2140,7 @@ function providerRuntimeBaseUrl(provider, explicitBaseUrl) {
 function providerHasCredential(provider, key, baseUrl) {
   const id = normalizeProvider(provider);
   if (registryProviderUsesCodex(id)) return !!(codexTokens && codexTokens.access_token);
+  if (registryProviderUsesClaudeCode(id)) return !!ClaudeCodeEngine.resolveClaudeBinary();   // login lives in the CLI; StarNet only checks it is installed
   if (registryProviderUsesDeviceOAuth(id)) { const e = oauthProviders[id]; return !!(e && e.tokens && e.tokens.access_token); }
   if (providerRequiresBaseUrl(id) && !String(baseUrl || '').trim()) return false;
   if (providerRequiresKey(id) && !String(key || '').trim()) return false;
@@ -9280,6 +9284,7 @@ const ROUTES = [
   { m: 'POST', qsplit: '/api/local-voice/warm', h: media.handleLocalVoiceWarm },
   { m: 'POST', exact: '/api/local-voice/transcribe', h: media.handleLocalVoiceTranscribe },
   { m: 'POST', exact: '/api/run', h: handleRun, errorPolicy: runFailPolicy },
+  { m: 'GET', exact: '/api/auth/claude-code/status', h: handleClaudeCodeStatus },   // is the `claude` CLI installed + signed in? (read-only)
   { m: 'POST', exact: '/api/run-recoveries/resolve', h: handleRunRecoveryResolve },
   { m: 'POST', exact: '/api/run-recoveries/continue', h: handleRunRecoveryContinue },
   { m: 'POST', exact: '/api/tts', h: media.handleTts, errorPolicy: media.ttsFailOpenPolicy },
@@ -17537,6 +17542,24 @@ async function runOnceCore(o) {
       loopEmit('agent.token', {agentId, runId, delta:text});
       loopEmit('agent.run.end', {agentId, runId, reason:'done', turns:0, usd:0});
       result = {reason:'done', turns:0, usd:0, messages:msgs.concat([{role:'assistant', content:text}])};
+    } else if (registryProviderUsesClaudeCode(activeProviderId) && !internal) {
+      // CLAUDE CODE ENGINE: the official CLI runs the turn with its own loop and tools; StarNet's granted tools
+      // ride in over a per-run MCP bridge (dispatch keeps every capability/consent gate), and the CLI's own
+      // permission asks surface as the normal permission.prompt card. Everything after this call (transcript,
+      // postconditions, ledger, credits) is unchanged. See sidecar/engines/claude-code.js.
+      let ccCwd = o.projectRoot || o.workdir || null;
+      if (!ccCwd) {
+        ccCwd = path.join(WORKSPACES, /^[A-Za-z0-9_-]{1,64}$/.test(String(agentId || '')) ? String(agentId) : 'agent');
+        try { fs.mkdirSync(ccCwd, { recursive: true }); } catch (e) { failNote('claude-code.cwd', e); }
+      }
+      result = await ClaudeCodeEngine.runClaudeCodeEngine({
+        agentId, runId, trigger, model, messages: msgs, emit: loopEmit, signal, cwd: ccCwd,
+        tools: o.outputOnly ? [] : toolDefs.concat(deferredToolDefs),
+        dispatch: (c) => dispatch(c, capCtx),
+        prompt: typeof prompt === 'function' ? prompt : null,
+        bypass: () => unrestrictedHostNow() || agentFullAccessNow() || (ownerTrusted && !prompt),
+        streamId, sessions: claudeCodeSessions, tmpRoot: os.tmpdir()
+      });
     } else result = await runAgentLoop({
       messages: msgs, provider, emit: loopEmit, cost, tools: o.outputOnly ? [] : toolDefs, dispatch, capCtx,
       isTask: internal ? undefined : isTask,
@@ -19853,6 +19876,14 @@ async function handleProviderModels(req, res) {
   }
 }
 
+
+// GET /api/auth/claude-code/status — the Claude Code engine's readiness. StarNet never holds the Claude credential;
+// this only asks the Commander's own CLI (`claude auth status`) whether it is installed and signed in.
+async function handleClaudeCodeStatus(req, res) {
+  const st = await ClaudeCodeEngine.authStatus({ force: /[?&]refresh=1/.test(String(req.url || '')) });
+  res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify({ installed: st.installed, connected: st.connected, authMethod: st.authMethod || '', reason: st.reason || '' }));
+}
 
 async function handleCodexModels(req, res) {
   const json = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(obj)); };
