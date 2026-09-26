@@ -1488,6 +1488,7 @@ const App = (() => {
 
   /* ---------- connect screen ---------- */
   const FALLBACK_MODELS = Object.freeze({
+    'claude-code': ['default', 'opus', 'sonnet', 'haiku'],   // CLI aliases; 'default' = whatever your claude CLI uses
     // grok/kimi mirror the sidecar registry's staticModels (the OAuth catalogs are account-discovered live;
     // these are only the offline/not-signed-in fallback so the field is never stranded empty).
     grok: ['grok-4', 'grok-3', 'grok-code-fast-1'],
@@ -1918,7 +1919,7 @@ const App = (() => {
     // the BYOK note talks about your key on 127.0.0.1 / the OS keychain — irrelevant and contradictory on the
     // keyless subscription paths (no key at all), so hide the whole disclosure there. On BYOK it stays collapsed
     // behind its toggle (progressive disclosure) — the note's own .hidden is owned by #byok-toggle, not this switch.
-    { const bd = el('byok-disclose'); if (bd) bd.classList.toggle('hidden', isOAuth || isStarnet || isOllama); }   // ollama: no key exists to ask about
+    { const bd = el('byok-disclose'); if (bd) bd.classList.toggle('hidden', isOAuth || isStarnet || isOllama || pickedProvider === 'claude-code'); }   // ollama: no key exists to ask about
     // Switching providers must drop any OTHER provider's in-flight device-code poll — a code minted for the
     // previous pick has no business connecting the new one's block. The active pick's own poll survives a re-click.
     cancelOAuthPolls(isOpenAI ? 'codex' : pickedProvider);   // the OPENAI card's sign-in IS the codex poll — keep it alive

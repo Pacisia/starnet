@@ -251,7 +251,7 @@ function composePrompt(parts, resuming) {
 /* ---------- session store (streamId -> claude session) ---------- */
 function makeSessionStore(file) {
   let map = Object.create(null);
-  try { if (file) map = Object.assign(Object.create(null), JSON.parse(fs.readFileSync(file, 'utf8'))); } catch (err) { failNote('claude-code.engine', err); }
+  try { if (file) map = Object.assign(Object.create(null), JSON.parse(fs.readFileSync(file, 'utf8'))); } catch (err) { if (!err || err.code !== 'ENOENT') failNote('claude-code.engine', err); }   // first run: no file yet
   function save() {
     if (!file) return;
     try { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(map), { mode: 0o600 }); } catch (err) { failNote('claude-code.engine', err); }
