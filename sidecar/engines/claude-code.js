@@ -104,21 +104,23 @@ function resolveClaudeBinary(deps) {
 }
 
 /* ---------- sign-in status (read-only; `claude auth status` prints JSON) ---------- */
-let statusCache = null;
+const statusCaches = new Map();   // per CLAUDE_CONFIG_DIR ('' = the default ~/.claude login = account A)
 function authStatus(deps) {
   deps = deps || {};
   const ttl = deps.ttlMs == null ? 30000 : deps.ttlMs;
+  const dirKey = String(deps.configDir || '');
+  const statusCache = statusCaches.get(dirKey) || null;
   if (statusCache && monoMs() - statusCache.at < ttl && !deps.force) return Promise.resolve(statusCache.value);
   const bin = deps.bin || resolveClaudeBinary(deps);
   if (!bin) return Promise.resolve({ installed: false, connected: false, bin: null, reason: 'Claude Code not found. Install it, then run `claude` in Terminal to sign in.' });
   return new Promise((resolve) => {
-    (deps.execFile || childProcess.execFile)(bin, ['auth', 'status'], { timeout: 15000, env: cleanEnv(process.env, bin) }, (err, stdout) => {
+    (deps.execFile || childProcess.execFile)(bin, ['auth', 'status'], { timeout: 15000, env: withConfigDir(cleanEnv(process.env, bin), deps.configDir) }, (err, stdout) => {
       let j = null;
       try { j = JSON.parse(String(stdout || '').trim()); } catch (err) { failNote('claude-code.engine', err); }
       const value = j
         ? { installed: true, connected: !!j.loggedIn, authMethod: String(j.authMethod || ''), bin, reason: j.loggedIn ? '' : 'Not signed in. Run `claude` in Terminal and sign in with your Claude account.' }
         : { installed: true, connected: false, bin, reason: 'Could not read Claude Code sign-in status' + (err ? ': ' + String(err.message || err).slice(0, 200) : '') };
-      statusCache = { at: monoMs(), value };
+      statusCaches.set(dirKey, { at: monoMs(), value });
       resolve(value);
     });
   });
@@ -435,6 +437,15 @@ function cleanEnv(env, bin) {
   return e;
 }
 
+/* Account B (and beyond) = a second `claude` login kept in its own config folder (CLAUDE_CONFIG_DIR). An empty
+   dir means the default login (account A). The folder holds the CLI's own credentials; StarNet never reads them. */
+function withConfigDir(env, configDir) {
+  const e = Object.assign({}, env);
+  if (configDir) e.CLAUDE_CONFIG_DIR = String(configDir);
+  else delete e.CLAUDE_CONFIG_DIR;
+  return e;
+}
+
 /* Spawn once and pump stdout lines into onLine. Resolves { code, stderr }. */
 function runCli(o) {
   return new Promise((resolve) => {
@@ -515,7 +526,7 @@ async function runClaudeCodeEngine(o) {
     });
     const mapper = makeStreamMapper({ emit, agentId, runId });
     const proc = await runCli({
-      bin, args, cwd: o.cwd || process.cwd(), env: cleanEnv(o.env || process.env, bin), signal: o.signal,
+      bin, args, cwd: o.cwd || process.cwd(), env: withConfigDir(cleanEnv(o.env || process.env, bin), o.configDir), signal: o.signal,
       stdin: composePrompt(parts, !!resumeId), onLine: mapper.line, spawn: o.spawn
     });
     const r = mapper.finish();
@@ -530,6 +541,8 @@ async function runClaudeCodeEngine(o) {
       contextTokens: r.usage.lastTurnIn || 0   // what the model actually held on its last turn (tokensIn is the run's cumulative sum)
     });
     let reason = 'done';
+    const limitText = String(r.errorText || '') + ' ' + String(proc.stderr || '').slice(-600) + ' ' + (r.ok ? '' : String(r.text || '').slice(0, 400));
+    const rateLimited = !cancelled && !r.ok && /usage limit|rate[ _-]?limit|limit reached|too many requests|\b429\b|quota|out of (?:credits|usage)/i.test(limitText);
     if (cancelled) reason = 'cancelled';
     else if (!r.subtype) {
       const hint = /not logged in|login|authenticat|OAuth|401/i.test(proc.stderr + r.errorText)
@@ -544,7 +557,8 @@ async function runClaudeCodeEngine(o) {
     } else if (!r.text.trim()) reason = 'empty';
     emit('agent.run.end', { agentId, runId, reason, turns: r.turns || 0, usd: 0 });
     const messages = (o.messages || []).concat(r.text ? [{ role: 'assistant', content: r.text }] : []);
-    return { reason, messages, text: r.text, usd: 0, turns: r.turns || 0, tokens, model: r.model || model, unpricedUsage: [], engine: ENGINE_ID, equivalentUsd: r.equivalentUsd };
+    return { reason, messages, text: r.text, usd: 0, turns: r.turns || 0, tokens, model: r.model || model, unpricedUsage: [], engine: ENGINE_ID, equivalentUsd: r.equivalentUsd,
+      rateLimited, limitText: rateLimited ? limitText.trim().slice(0, 300) : '' };
   } catch (e) {
     return fail('Claude Code engine failed: ' + ((e && e.message) || e), true);
   } finally {
@@ -593,5 +607,5 @@ function makeClaudeCodeProvider(opts) {
 module.exports = {
   ENGINE_ID, MODELS, PERMISSION_TOOL, MCP_SERVER_NAME, APPROVE_TOOL, DUPLICATE_TOOL,
   resolveClaudeBinary, authStatus, buildArgs, makeStreamMapper, splitConversation, composePrompt,
-  makeSessionStore, startToolBridge, makeApprover, runClaudeCodeEngine, makeClaudeCodeProvider, cleanEnv, mcpConfig, cliEffort
+  makeSessionStore, startToolBridge, makeApprover, runClaudeCodeEngine, makeClaudeCodeProvider, cleanEnv, mcpConfig, cliEffort, withConfigDir
 };

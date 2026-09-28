@@ -733,6 +733,7 @@ const App = (() => {
       groq: 'GROQ',
       mistral: 'MISTRAL',
       deepseek: 'DEEPSEEK',
+      mimo: 'MIMO',
       together: 'TOGETHER',
       fireworks: 'FIREWORKS',
       perplexity: 'PERPLEXITY',
@@ -758,6 +759,7 @@ const App = (() => {
     if (p === 'groq') return 'groq';
     if (p === 'mistral' || p === 'mistralai') return 'mistral';
     if (p === 'deepseek') return 'deepseek';
+    if (p === 'mimo' || p === 'xiaomi' || p === 'xiaomi-mimo' || p === 'mimo-token-plan') return 'mimo';
     if (p === 'together' || p === 'together-ai') return 'together';
     if (p === 'fireworks' || p === 'fireworks-ai') return 'fireworks';
     if (p === 'perplexity' || p === 'pplx' || p === 'sonar') return 'perplexity';
@@ -789,6 +791,7 @@ const App = (() => {
     if (p === 'groq') return 'gsk_...  -  console.groq.com/keys';
     if (p === 'mistral') return 'Mistral API key';
     if (p === 'deepseek') return 'sk-...  -  platform.deepseek.com/api_keys';
+    if (p === 'mimo') return 'tp-...  -  your MiMo Token Plan key (Singapore)';
     if (p === 'together') return 'Together API key';
     if (p === 'fireworks') return 'Fireworks API key';
     if (p === 'perplexity') return 'pplx-...  -  perplexity.ai/settings/api';
@@ -808,6 +811,7 @@ const App = (() => {
       groq: 'https://console.groq.com/keys',
       mistral: 'https://console.mistral.ai/api-keys',
       deepseek: 'https://platform.deepseek.com/api_keys',
+      mimo: 'https://platform.xiaomimimo.com/token-plan',
       together: 'https://api.together.ai/settings/api-keys',
       fireworks: 'https://fireworks.ai/account/api-keys',
       perplexity: 'https://www.perplexity.ai/settings/api',
@@ -1500,6 +1504,7 @@ const App = (() => {
     groq: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'meta-llama/llama-4-scout-17b-16e-instruct'],
     mistral: ['mistral-large-latest', 'mistral-medium-latest', 'mistral-small-latest'],
     deepseek: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-pro'],
+    mimo: ['mimo-v2.6-pro', 'mimo-v2.6-flash', 'mimo-v2.5-pro'],
     together: ['meta-llama/Llama-3.3-70B-Instruct-Turbo', 'Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8', 'deepseek-ai/DeepSeek-V3'],
     fireworks: ['accounts/fireworks/models/deepseek-v3p1', 'accounts/fireworks/models/kimi-k2p5', 'accounts/fireworks/models/llama-v3p3-70b-instruct'],
     perplexity: ['sonar-pro', 'sonar', 'sonar-reasoning-pro'],
@@ -1596,6 +1601,10 @@ const App = (() => {
     deepseek: [
       { label: 'DeepSeek Chat', id: 'deepseek-chat', tag: '' },
       { label: 'Reasoner', id: 'deepseek-reasoner', tag: 'reasoning' }
+    ],
+    mimo: [
+      { label: 'MiMo V2.6 Pro', id: 'mimo-v2.6-pro', tag: '' },
+      { label: 'MiMo V2.6 Flash', id: 'mimo-v2.6-flash', tag: 'fast' }
     ],
     together: [
       { label: 'Llama 3.3 70B', id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', tag: '' },

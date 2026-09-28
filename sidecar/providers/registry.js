@@ -396,6 +396,32 @@
       order: 40
     },
     {
+      // Dylan's fork: Xiaomi MiMo Token Plan (Singapore region). API-key auth over the OpenAI-compatible wire.
+      // Region addresses: sgp = token-plan-sgp.xiaomimimo.com, cn = token-plan-cn.xiaomimimo.com (set MIMO_BASE_URL to change).
+      id: 'mimo',
+      aliases: ['xiaomi', 'xiaomi-mimo', 'mimo-token-plan'],
+      name: 'Xiaomi MiMo',
+      label: 'MIMO',
+      endpoint: 'token-plan-sgp.xiaomimimo.com/v1',
+      blurb: 'Xiaomi MiMo Token Plan (Singapore)',
+      live: true,
+      adapter: 'openai-compatible',
+      apiMode: 'chat_completions',
+      authType: 'api_key',
+      keyRequired: true,
+      keyEnv: ['SKYNET_MIMO_API_KEY', 'MIMO_API_KEY', 'XIAOMI_API_KEY'],
+      modelsRequireAuth: true,
+      baseUrl: 'https://token-plan-sgp.xiaomimimo.com/v1',
+      baseUrlEnv: ['MIMO_BASE_URL'],
+      modelsPath: '/models',
+      defaultReasoningEffort: 'medium',
+      unmetered: true,   // flat-rate Token Plan: no per-token dollar cost to meter
+      credentialPool: true,
+      supportsTools: null,
+      supportsReasoning: null,
+      order: 41
+    },
+    {
       id: 'together',
       priceFamily: 'together',   // prices.js table — this endpoint's /models publishes no pricing
       aliases: ['together-ai'],

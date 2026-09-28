@@ -314,6 +314,7 @@ const Harness = (() => {
     if (p === 'groq') return 'groq';
     if (p === 'mistral' || p === 'mistralai') return 'mistral';
     if (p === 'deepseek') return 'deepseek';
+    if (p === 'mimo' || p === 'xiaomi' || p === 'xiaomi-mimo' || p === 'mimo-token-plan') return 'mimo';
     if (p === 'together' || p === 'together-ai') return 'together';
     if (p === 'fireworks' || p === 'fireworks-ai') return 'fireworks';
     if (p === 'perplexity' || p === 'pplx' || p === 'sonar') return 'perplexity';

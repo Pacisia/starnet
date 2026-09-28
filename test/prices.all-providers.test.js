@@ -32,7 +32,8 @@ const UNPRICED_BY_DESIGN = {
   perplexity: 'vendor publishes per-request search fees on top of tokens; a token rate alone would under-report',
   custom: 'a user-supplied endpoint: nothing is known about its billing',
   cerebras: 'console.groq-style catalog carries no pricing and the vendor page lists too few ids to table (2026-08-21)',
-  starnet: 'managed proxy bills the ledger per request itself (usage.cost on the wire)'
+  starnet: 'managed proxy bills the ledger per request itself (usage.cost on the wire)',
+  mimo: 'flat-rate Xiaomi MiMo Token Plan (Dylan\'s fork): usage is a subscription allowance, not per-token dollars'
 };
 // models a profile would run by default: its first static model, else a representative id per family
 const REPRESENTATIVE = {

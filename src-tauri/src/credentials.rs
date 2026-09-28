@@ -48,7 +48,7 @@ pub(crate) fn connector_encryption_key() -> Result<String, String> {
 fn valid_connector_key(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|c| c.is_ascii_hexdigit())
 }
-pub(crate) const KEYCHAIN_PROVIDERS: [&str; 13] = [
+pub(crate) const KEYCHAIN_PROVIDERS: [&str; 14] = [
     "openrouter",
     "openai",
     "anthropic",
@@ -57,6 +57,7 @@ pub(crate) const KEYCHAIN_PROVIDERS: [&str; 13] = [
     "groq",
     "mistral",
     "deepseek",
+    "mimo",
     "together",
     "fireworks",
     "perplexity",
@@ -71,7 +72,7 @@ pub(crate) const SIDECAR_CHANNEL_TOKEN_ENVS: [(&str, &str); 2] = [
     ("discord", "SKYNET_DISCORD_TOKEN"),
 ];
 
-pub(crate) const SIDECAR_PROVIDER_KEY_ENVS: [(&str, &str); 12] = [
+pub(crate) const SIDECAR_PROVIDER_KEY_ENVS: [(&str, &str); 13] = [
     ("openai", "SKYNET_OPENAI_API_KEY"),
     ("anthropic", "SKYNET_ANTHROPIC_API_KEY"),
     ("gemini", "SKYNET_GEMINI_API_KEY"),
@@ -79,6 +80,7 @@ pub(crate) const SIDECAR_PROVIDER_KEY_ENVS: [(&str, &str); 12] = [
     ("groq", "SKYNET_GROQ_API_KEY"),
     ("mistral", "SKYNET_MISTRAL_API_KEY"),
     ("deepseek", "SKYNET_DEEPSEEK_API_KEY"),
+    ("mimo", "SKYNET_MIMO_API_KEY"),
     ("together", "SKYNET_TOGETHER_API_KEY"),
     ("fireworks", "SKYNET_FIREWORKS_API_KEY"),
     ("perplexity", "SKYNET_PERPLEXITY_API_KEY"),
@@ -98,6 +100,7 @@ pub(crate) fn normalize_provider(provider: &str) -> &'static str {
         "groq" => "groq",
         "mistral" | "mistralai" => "mistral",
         "deepseek" => "deepseek",
+        "mimo" | "xiaomi" | "xiaomi-mimo" | "mimo-token-plan" => "mimo",
         "together" | "together-ai" => "together",
         "fireworks" | "fireworks-ai" => "fireworks",
         "perplexity" | "pplx" | "sonar" => "perplexity",

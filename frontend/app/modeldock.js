@@ -16,7 +16,8 @@ const ModelDock = (() => {
     xai: ['grok-4.3', 'grok-4-fast', 'grok-4'],
     groq: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'meta-llama/llama-4-scout-17b-16e-instruct'],
     mistral: ['mistral-large-latest', 'mistral-medium-latest', 'mistral-small-latest'],
-    deepseek: ['deepseek-chat', 'deepseek-reasoner'],   // dropped 'deepseek-v4-pro' — unconfirmed/invented; real line is chat + reasoner (+ v3 snapshots)
+    deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+    mimo: ['mimo-v2.6-pro', 'mimo-v2.6-flash', 'mimo-v2.5-pro'],   // dropped 'deepseek-v4-pro' — unconfirmed/invented; real line is chat + reasoner (+ v3 snapshots)
     together: ['meta-llama/Llama-3.3-70B-Instruct-Turbo', 'Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8', 'deepseek-ai/DeepSeek-V3'],
     fireworks: ['accounts/fireworks/models/deepseek-v3p1', 'accounts/fireworks/models/kimi-k2p5', 'accounts/fireworks/models/llama-v3p3-70b-instruct'],
     perplexity: ['sonar-pro', 'sonar', 'sonar-reasoning-pro'],
@@ -56,7 +57,7 @@ const ModelDock = (() => {
     qwen: 'QWEN',
     cohere: 'COHERE'
   };
-  const PROVIDER_RANK = { starnet: -1, 'claude-code': -0.5, codex: 0, grok: 1, kimi: 2, openrouter: 3, openai: 4, anthropic: 5, gemini: 6, xai: 7, groq: 8, mistral: 9, deepseek: 10, together: 11, fireworks: 12, perplexity: 13, cerebras: 14, ollama: 15, custom: 16 };
+  const PROVIDER_RANK = { starnet: -1, 'claude-code': -0.5, codex: 0, grok: 1, kimi: 2, openrouter: 3, openai: 4, anthropic: 5, gemini: 6, xai: 7, groq: 8, mistral: 9, deepseek: 10, mimo: 10.5, together: 11, fireworks: 12, perplexity: 13, cerebras: 14, ollama: 15, custom: 16 };
 
   let opts = {};
   let wired = false;
@@ -80,7 +81,7 @@ const ModelDock = (() => {
   }
   function providerLabel(p) {
     p = normalizeProvider(p);
-    const map = { starnet: 'STARNET', 'claude-code': 'CLAUDE CODE', codex: 'GPT / CODEX', grok: 'GROK OAUTH', kimi: 'KIMI OAUTH', openrouter: 'OPENROUTER', openai: 'OPENAI API', anthropic: 'ANTHROPIC', gemini: 'GEMINI', xai: 'XAI', groq: 'GROQ', mistral: 'MISTRAL', deepseek: 'DEEPSEEK', together: 'TOGETHER', fireworks: 'FIREWORKS', perplexity: 'PERPLEXITY', cerebras: 'CEREBRAS', ollama: 'OLLAMA', custom: 'CUSTOM' };
+    const map = { starnet: 'STARNET', 'claude-code': 'CLAUDE CODE', codex: 'GPT / CODEX', grok: 'GROK OAUTH', kimi: 'KIMI OAUTH', openrouter: 'OPENROUTER', openai: 'OPENAI API', anthropic: 'ANTHROPIC', gemini: 'GEMINI', xai: 'XAI', groq: 'GROQ', mistral: 'MISTRAL', deepseek: 'DEEPSEEK', mimo: 'MIMO', together: 'TOGETHER', fireworks: 'FIREWORKS', perplexity: 'PERPLEXITY', cerebras: 'CEREBRAS', ollama: 'OLLAMA', custom: 'CUSTOM' };
     return map[p] || String(p || 'openrouter').toUpperCase();
   }
   function normalizeProvider(p) {
@@ -97,6 +98,7 @@ const ModelDock = (() => {
     if (p === 'groq') return 'groq';
     if (p === 'mistral' || p === 'mistralai') return 'mistral';
     if (p === 'deepseek') return 'deepseek';
+    if (p === 'mimo' || p === 'xiaomi' || p === 'xiaomi-mimo' || p === 'mimo-token-plan') return 'mimo';
     if (p === 'together' || p === 'together-ai') return 'together';
     if (p === 'fireworks' || p === 'fireworks-ai') return 'fireworks';
     if (p === 'perplexity' || p === 'pplx' || p === 'sonar') return 'perplexity';
@@ -497,7 +499,7 @@ const ModelDock = (() => {
     renderList();
     // 'starnet' first: a linked station's own credits are the most direct way to run, and its catalog is
     // the whole managed lineup. providerEnabled() keeps it out of the list when no credits are configured.
-    const ids = ['starnet', 'claude-code', 'codex', 'grok', 'kimi', 'openrouter', 'openai', 'anthropic', 'gemini', 'xai', 'groq', 'mistral', 'deepseek', 'together', 'fireworks', 'perplexity', 'cerebras', 'ollama', 'custom'];
+    const ids = ['starnet', 'claude-code', 'codex', 'grok', 'kimi', 'openrouter', 'openai', 'anthropic', 'gemini', 'xai', 'groq', 'mistral', 'deepseek', 'mimo', 'together', 'fireworks', 'perplexity', 'cerebras', 'ollama', 'custom'];
     const active = provider();
     if (ids.indexOf(active) < 0) ids.unshift(active);
     const pending = ids.map(p => fetchProviderModels(p, force));
@@ -894,7 +896,7 @@ const ModelDock = (() => {
   // `ensure: { id, provider }` guarantees a specific model (e.g. an agent's own pin) is present even if the
   // provider is unconfigured, so the picker can always show + preselect it. Returns [{ id, name, provider, … }].
   async function computeCatalog(force, ensure) {
-    const ids = ['claude-code', 'codex', 'grok', 'kimi', 'openrouter', 'openai', 'anthropic', 'gemini', 'xai', 'groq', 'mistral', 'deepseek', 'together', 'fireworks', 'perplexity', 'cerebras', 'ollama', 'custom'];
+    const ids = ['claude-code', 'codex', 'grok', 'kimi', 'openrouter', 'openai', 'anthropic', 'gemini', 'xai', 'groq', 'mistral', 'deepseek', 'mimo', 'together', 'fireworks', 'perplexity', 'cerebras', 'ollama', 'custom'];
     const active = provider();
     if (ids.indexOf(active) < 0) ids.unshift(active);
     const parts = await Promise.all(ids.map(p => fetchProviderModels(p, force).catch(() => [])));

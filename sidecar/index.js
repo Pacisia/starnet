@@ -105,7 +105,8 @@ const { starnetManual } = require('./manual.js');   // truthful "how StarNet wor
 const FinishLine = require('./finish-line.js');     // immutable "crawl to the finish line" task doctrine at the final prompt seam
 const { makeHarnessSnapshot } = require('./harness-snapshot.js');   // bounded secret-free build/scheduler/connectors/diagnostics truth for station.inspect
 const { makeOpenRouterProvider } = require('./providers/openrouter.js');
-const ClaudeCodeEngine = require('./engines/claude-code.js');   // Claude Code CLI as an agent engine (Commander's own `claude login`)
+const ClaudeCodeEngine = require('./engines/claude-code.js');
+const Accounts = require('./accounts.js');   // Dylan's fork: account A/B routing for Claude Code + ChatGPT sign-ins   // Claude Code CLI as an agent engine (Commander's own `claude login`)
 const edgetts = require('./edgetts.js');   // V-EDGE: free keyless neural TTS floor (decoupled from the LLM provider)
 const localVoice = require('./local-voice.js');
 const { makeMediaService } = require('./media-service.js');
@@ -2141,7 +2142,7 @@ function providerRuntimeBaseUrl(provider, explicitBaseUrl) {
 }
 function providerHasCredential(provider, key, baseUrl) {
   const id = normalizeProvider(provider);
-  if (registryProviderUsesCodex(id)) return !!(codexTokens && codexTokens.access_token);
+  if (registryProviderUsesCodex(id)) return !!(codexTokens && codexTokens.access_token) || codexB.connected();
   if (registryProviderUsesClaudeCode(id)) return !!ClaudeCodeEngine.resolveClaudeBinary();   // login lives in the CLI; StarNet only checks it is installed
   if (registryProviderUsesDeviceOAuth(id)) { const e = oauthProviders[id]; return !!(e && e.tokens && e.tokens.access_token); }
   if (providerRequiresBaseUrl(id) && !String(baseUrl || '').trim()) return false;
@@ -3623,6 +3624,88 @@ async function refreshCodexTokensOnce() {
   saveCodexTokens(codexTokens);
   return codexTokens.access_token;
 }
+
+// ---- MULTI-ACCOUNT (Dylan's fork): a SECOND ChatGPT sign-in ("account B") beside the original ("account A").
+//      Same protected posture as account A: tokens live only in WORKSPACES/codex-b/tokens.json, never on the bus.
+//      The account router (sidecar/accounts.js) picks A or B per agent and moves an agent to the other account on
+//      its next run when one hits its usage limit. ----
+const CODEX_B_TOKENS_FILE = path.join(WORKSPACES, 'codex-b', 'tokens.json');
+function makeCodexSlot(file, tag) {
+  let tokens = null, dead = null, persistError = '', inflight = null;
+  try { tokens = loadResilient(file, tag); } catch (_) { tokens = null; }
+  dead = codexAuthState.deadFromTokens(tokens);
+  function save(obj) {
+    try { fs.mkdirSync(path.dirname(file), { recursive: true }); } catch (_) {}
+    const r = codexTokenStore.persistCodexTokensVerified({ tokens: obj, save: (o) => saveResilient(file, o), load: () => loadResilient(file, tag) });
+    persistError = r.ok ? '' : (r.error || 'token could not be persisted to disk');
+    if (!r.ok) console.error('[' + tag + '] token persist UNVERIFIED (' + persistError + ')');
+    return r.ok;
+  }
+  async function refreshOnce() {
+    let next;
+    try { next = await codexAuth.refreshTokens({ fetch: globalThis.fetch, refresh_token: tokens.refresh_token, now: Date.now() }); }
+    catch (e) {
+      const marker = codexAuthState.deadMarkerFromError(e, new Date().toISOString());
+      if (marker) { dead = marker; tokens = codexAuthState.withDeadMarker(tokens, marker); save(tokens); }
+      throw e;
+    }
+    tokens = codexAuthState.withoutDeadMarker(Object.assign({}, tokens, next)); dead = null; save(tokens);
+    return tokens.access_token;
+  }
+  function notConnected() { const e = new Error('Not signed in to ChatGPT account B — connect it first.'); e.code = 'codex_not_connected'; e.reloginRequired = true; return e; }
+  return {
+    connected: () => !!(tokens && tokens.access_token && !dead),
+    async ensure() {
+      if (!tokens || !tokens.access_token) throw notConnected();
+      if (!codexAuth.accessTokenIsExpiring(tokens.access_token, codexAuth.REFRESH_SKEW_SECONDS, Date.now())) return tokens.access_token;
+      if (inflight) return inflight;
+      inflight = refreshOnce().finally(() => { inflight = null; });
+      return inflight;
+    },
+    async forceRefresh(stale) {
+      if (!tokens || !tokens.access_token) throw notConnected();
+      if (stale && tokens.access_token !== stale) return tokens.access_token;
+      if (inflight) return inflight;
+      inflight = refreshOnce().finally(() => { inflight = null; });
+      return inflight;
+    },
+    setFromCreds(creds) {
+      tokens = { access_token: creds.access_token, refresh_token: creds.refresh_token, last_refresh: creds.last_refresh, auth_mode: creds.auth_mode };
+      dead = null; save(tokens);
+    },
+    clear() {
+      const ok = saveCredentialRemovalVerified(file, null, raw => raw === null, tag);
+      if (!ok) { persistError = 'logout could not be persisted to disk'; return false; }
+      try { fs.unlinkSync(file); } catch (_) {}
+      try { fs.unlinkSync(file + '.bak'); } catch (_) {}
+      tokens = null; dead = null; persistError = '';
+      return true;
+    },
+    status: () => codexAuthState.statusPayload({ tokens, dead, persistError })
+  };
+}
+const codexB = makeCodexSlot(CODEX_B_TOKENS_FILE, 'codex-b');
+function codexAAlive() { return !!(codexTokens && codexTokens.access_token && !codexAuthDead); }
+function codexAccountsAvailable() { const a = []; if (codexAAlive()) a.push('A'); if (codexB.connected()) a.push('B'); return a.length ? a : ['A']; }
+function codexFnsFor(acct) {
+  return acct === 'B'
+    ? { ensure: () => codexB.ensure(), renew: (stale) => codexB.forceRefresh(stale) }
+    : { ensure: ensureCodexAccessToken, renew: forceRefreshCodexAccessToken };
+}
+// Claude Code account B = a second `claude` login in its own config folder. Sign it in once from Terminal:
+//   CLAUDE_CONFIG_DIR=~/.claude-b claude      (then /login with the second Claude account)
+const CLAUDE_B_DIR = String(process.env.STARNET_CLAUDE_B_DIR || path.join(os.homedir(), '.claude-b'));
+function claudeAccountsAvailable() {
+  let hasB = false;
+  try { hasB = fs.statSync(CLAUDE_B_DIR).isDirectory() && fs.readdirSync(CLAUDE_B_DIR).length > 0; } catch (_) {}
+  return hasB ? ['A', 'B'] : ['A'];
+}
+function claudeConfigDirFor(acct) { return acct === 'B' ? CLAUDE_B_DIR : ''; }
+const accountRouter = Accounts.makeAccountRouter({
+  onSwitch: (ev) => console.log('[accounts] ' + ev.provider + ' agent ' + ev.agentId + ' moved from account ' + ev.from + ' to ' + ev.to + ' (usage limit)')
+});
+// Which account an agent is pinned to, if the roster says so (optional field `account: "A" | "B"`).
+function pinnedAccountFor(agentId) { try { const r = agentRoster.get(String(agentId || '')); const a = r && String(r.account || '').toUpperCase(); return a === 'A' || a === 'B' ? a : ''; } catch (_) { return ''; } }
 
 // ---- Grok / Kimi (subscription) device-OAuth — the SAME protected-sibling posture as the codex tokens above:
 //      tokens live ONLY in WORKSPACES/<id>/tokens.json (out of the fs jail) and NEVER ride the event bus.
@@ -9435,6 +9518,12 @@ const ROUTES = [
   // with {models:[]} + error on any catalog failure, so it never throws into the central guard.
   { m: 'GET', qprefix: '/api/models/', h: handleProviderModels },
   { m: 'POST', exact: '/api/auth/codex/logout', h: handleCodexLogout },
+  // Dylan's fork: second ChatGPT sign-in (account B) + the account overview for Settings / Control Lite
+  { m: 'POST', exact: '/api/auth/codex-b/start', h: handleCodexStart },
+  { m: 'POST', exact: '/api/auth/codex-b/poll', h: handleCodexBPoll },
+  { m: 'GET', exact: '/api/auth/codex-b/status', h: handleCodexBStatus },
+  { m: 'POST', exact: '/api/auth/codex-b/logout', h: handleCodexBLogout },
+  { m: 'GET', exact: '/api/accounts', h: handleAccountsOverview },
   { m: 'GET', exact: '/api/connectors/catalog', h: handleConnectorCatalog },
   { m: 'POST', exact: '/api/connectors/oauth/start', h: handleConnectorOauthStart },
   { m: 'POST', exact: '/api/connectors/oauth/device/poll', h: handleConnectorDevicePoll },
@@ -16387,16 +16476,19 @@ async function runOnceCore(o) {
   // an API key. A dead/missing token surfaces as a clean run.error so the UI can prompt a re-sign-in; everything
   // downstream of the provider seam (loop, cost, gauge) is identical to the OpenRouter path.
   let provider;
+  // Dylan's fork: which ChatGPT account (A/B) this run uses — sticky per agent, moves on a usage-limit hit.
+  const codexAcct = usingCodex ? accountRouter.pick('codex', agentId, codexAccountsAvailable(), pinnedAccountFor(agentId)) : '';
   if (usingCodex) {
+    const fns = codexFnsFor(codexAcct);
     let codexToken;
-    try { codexToken = await ensureCodexAccessToken(); }
+    try { codexToken = await fns.ensure(); }
     catch (e) {
       emit('agent.run.start', { agentId, runId, trigger: trigger, model });
-      emit('agent.run.error', { agentId, runId, transient: !(e && e.reloginRequired), message: 'ChatGPT sign-in needed: ' + ((e && e.message) || e) });
+      emit('agent.run.error', { agentId, runId, transient: !(e && e.reloginRequired), message: 'ChatGPT sign-in needed (account ' + codexAcct + '): ' + ((e && e.message) || e) });
       emit('agent.run.end', { agentId, runId, reason: 'error', turns: 0, usd: 0 });
       return;
     }
-    provider = selectProvider({ provider: providerId, fetch: globalThis.fetch, token: codexToken, renewToken: forceRefreshCodexAccessToken, baseUrl, reasoningEffort });
+    provider = selectProvider({ provider: providerId, fetch: globalThis.fetch, token: codexToken, renewToken: fns.renew, baseUrl, reasoningEffort });
   } else if (usingDeviceOAuth) {
     // Grok / Kimi subscription: the OAuth access token authenticates the OpenAI-compatible endpoint (riding in
     // AS the Bearer key). Same dead/missing-token -> clean run.error contract as codex; kimi's X-Msh-* headers
@@ -16498,7 +16590,8 @@ async function runOnceCore(o) {
     if (fbManaged !== managedRun) continue;
     let fbProvider;
     if (providerUsesCodex(fbProviderId)) {
-      fbProvider = selectProvider({ provider: fbProviderId, fetch: globalThis.fetch, tokenProvider: ensureCodexAccessToken, renewToken: forceRefreshCodexAccessToken, baseUrl: fbBaseUrl, reasoningEffort });
+      const fbFns = codexFnsFor(usingCodex ? codexAcct : accountRouter.pick('codex', agentId, codexAccountsAvailable(), pinnedAccountFor(agentId)));
+      fbProvider = selectProvider({ provider: fbProviderId, fetch: globalThis.fetch, tokenProvider: fbFns.ensure, renewToken: fbFns.renew, baseUrl: fbBaseUrl, reasoningEffort });
     } else if (providerUsesDeviceOAuth(fbProviderId)) {
       fbProvider = selectProvider({ provider: fbProviderId, fetch: globalThis.fetch, tokenProvider: () => ensureOAuthAccessToken(fbProviderId), headersProvider: () => oauthInferenceHeaders(fbProviderId), baseUrl: fbBaseUrl, reasoningEffort });
     } else {
@@ -17458,6 +17551,11 @@ async function runOnceCore(o) {
     // right direction, since the alternative is a run that can still call tools but can no longer SEE any.
     if (name === 'agent.compact') execution.resetToolBytes();
     execution.observeToolEvent(name, payload);
+    // Dylan's fork: a ChatGPT usage-limit error parks this account; the agent's NEXT run moves to the other one.
+    if (codexAcct && name === 'agent.run.error' && payload && Accounts.isRateLimitMessage(payload.message)) {
+      const ms = accountRouter.penalize('codex', codexAcct, payload.message);
+      console.warn('[accounts] ChatGPT account ' + codexAcct + ' hit its limit — cooling for ' + Math.round(ms / 60000) + ' min');
+    }
     if (((taskBrief || imageTask) || o.postconditions != null) && name === 'agent.run.end' && payload && payload.runId === runId && payload.reason === 'done') {
       bufferedTaskEnd = payload; return;
     }
@@ -17555,14 +17653,22 @@ async function runOnceCore(o) {
         ccCwd = path.join(WORKSPACES, /^[A-Za-z0-9_-]{1,64}$/.test(String(agentId || '')) ? String(agentId) : 'agent');
         try { fs.mkdirSync(ccCwd, { recursive: true }); } catch (e) { failNote('claude-code.cwd', e); }
       }
+      // Dylan's fork: which Claude login (A = default ~/.claude, B = CLAUDE_B_DIR) this run uses.
+      const ccAcct = accountRouter.pick('claude-code', agentId, claudeAccountsAvailable(), pinnedAccountFor(agentId));
       result = await ClaudeCodeEngine.runClaudeCodeEngine({
+        configDir: claudeConfigDirFor(ccAcct),
         agentId, runId, trigger, model, reasoningEffort, messages: msgs, emit: loopEmit, signal, cwd: ccCwd,
         tools: o.outputOnly ? [] : toolDefs.concat(deferredToolDefs),
         dispatch: (c) => dispatch(c, capCtx),
         prompt: typeof prompt === 'function' ? prompt : null,
         bypass: () => unrestrictedHostNow() || agentFullAccessNow() || (ownerTrusted && !prompt),
-        streamId, sessions: claudeCodeSessions, tmpRoot: os.tmpdir()
+        // a resumed CLI session only exists under the login that created it, so B keeps its own session ids
+        streamId: (streamId && ccAcct === 'B') ? streamId + '@B' : streamId, sessions: claudeCodeSessions, tmpRoot: os.tmpdir()
       });
+      if (result && result.rateLimited) {
+        const ms = accountRouter.penalize('claude-code', ccAcct, result.limitText);
+        console.warn('[accounts] Claude account ' + ccAcct + ' hit its limit — cooling for ' + Math.round(ms / 60000) + ' min');
+      }
     } else result = await runAgentLoop({
       messages: msgs, provider, emit: loopEmit, cost, tools: o.outputOnly ? [] : toolDefs, dispatch, capCtx,
       isTask: internal ? undefined : isTask,
@@ -19911,6 +20017,57 @@ async function handleCodexModels(req, res) {
   } catch (e) {
     json(200, { models: [], default: null, error: (e && e.message) || 'not connected', code: (e && e.code) || '' });
   }
+}
+
+// ---- Dylan's fork: ChatGPT account B (same device-code wire as account A; tokens go to the B slot) ----
+async function handleCodexBPoll(req, res) {
+  const json = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(obj)); };
+  let body; try { body = JSON.parse(await readBody(req, 1 << 16)) || {}; } catch (e) { return json(400, { error: 'bad json' }); }
+  const device_auth_id = String(body.device_auth_id || ''), user_code = String(body.user_code || '');
+  if (!device_auth_id || !user_code) return json(400, { error: 'missing device_auth_id / user_code' });
+  try {
+    const poll = await codexAuth.pollDeviceLogin({ fetch: globalThis.fetch, device_auth_id, user_code });
+    if (poll.pending) return json(200, { status: 'pending' });
+    const creds = await codexAuth.exchangeCode({ fetch: globalThis.fetch, authorization_code: poll.authorization_code, code_verifier: poll.code_verifier, now: Date.now() });
+    codexB.setFromCreds(creds);
+    console.log('  · ChatGPT account B connected — agents can now be routed to it');
+    json(200, { status: 'connected' });
+  } catch (e) {
+    json(502, { status: 'error', error: (e && e.message) || 'ChatGPT sign-in failed', code: (e && e.code) || 'device_code_poll_error' });
+  }
+}
+function handleCodexBStatus(req, res) {
+  res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify(codexB.status()));
+}
+function handleCodexBLogout(req, res) {
+  const json = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(obj)); };
+  if (!codexB.clear()) return json(500, { error: 'logout could not be persisted; account B remains connected', code: 'codex_logout_persist_failed' });
+  json(200, { connected: false });
+}
+// GET /api/accounts — which accounts are signed in, which are cooling after a usage limit, recent switches.
+// Booleans/timestamps only; never a credential.
+async function handleAccountsOverview(req, res) {
+  const force = /[?&]refresh=1/.test(String(req.url || ''));
+  let ccA = null, ccB = null;
+  try { ccA = await ClaudeCodeEngine.authStatus({ force }); } catch (_) {}
+  const claudeAvail = claudeAccountsAvailable();
+  if (claudeAvail.indexOf('B') >= 0) { try { ccB = await ClaudeCodeEngine.authStatus({ force, configDir: CLAUDE_B_DIR }); } catch (_) {} }
+  const body = {
+    claude: {
+      A: { connected: !!(ccA && ccA.connected) },
+      B: { connected: !!(ccB && ccB.connected), setUp: claudeAvail.indexOf('B') >= 0, signInCommand: 'CLAUDE_CONFIG_DIR=' + CLAUDE_B_DIR + ' claude' },
+      routing: accountRouter.status('claude-code', claudeAvail)
+    },
+    chatgpt: {
+      A: { connected: codexAAlive() },
+      B: { connected: codexB.connected() },
+      routing: accountRouter.status('codex', codexAccountsAvailable())
+    },
+    switches: accountRouter.recentSwitches()
+  };
+  res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify(body));
 }
 
 // POST /api/auth/codex/logout — forget the stored ChatGPT credentials.

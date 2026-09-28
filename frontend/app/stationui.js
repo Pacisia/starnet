@@ -4120,6 +4120,7 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
     { id: 'groq',          name: 'GROQ',              endpoint: 'api.groq.com/openai/v1',     blurb: 'fast inference', live: true },
     { id: 'mistral',       name: 'MISTRAL',           endpoint: 'api.mistral.ai/v1',          blurb: 'Mistral API', live: true },
     { id: 'deepseek',      name: 'DEEPSEEK',          endpoint: 'api.deepseek.com',           blurb: 'DeepSeek API', live: true },
+    { id: 'mimo',          name: 'MIMO',              endpoint: 'token-plan-sgp.xiaomimimo.com/v1', blurb: 'Xiaomi MiMo Token Plan (Singapore)', live: true },
     { id: 'together',      name: 'TOGETHER',          endpoint: 'api.together.ai/v1',         blurb: 'Together API', live: true },
     { id: 'fireworks',     name: 'FIREWORKS',         endpoint: 'api.fireworks.ai/inference/v1', blurb: 'Fireworks API', live: true },
     { id: 'perplexity',    name: 'PERPLEXITY',        endpoint: 'api.perplexity.ai',          blurb: 'Sonar API', live: true },
@@ -6418,6 +6419,8 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
 
     const sections = [
       { id: 'providers', label: 'PROVIDERS', glyph: '⌁', desc: 'Connect an AI service and manage its saved credentials.', build: frag(secProviders) },
+      // Dylan's fork: two Claude Code logins + two ChatGPT sign-ins, with automatic switching on usage limits
+      { id: 'accounts', label: 'ACCOUNTS', glyph: '⇆', desc: 'Second Claude and ChatGPT accounts, and automatic switching when one hits its limit.', build: el => { if (typeof AccountsPanel !== 'undefined') AccountsPanel.mount(el); else el.textContent = 'accounts panel not loaded'; } },
       { id: 'autonomy', label: 'AUTONOMY', glyph: '◈', desc: 'Choose when agents start work, what they can do, and how often.', build: frag(secAutonomy) },
       { id: 'nightshift', label: 'NIGHT SHIFT', glyph: '☾', desc: 'See unattended activity, its current focus, and recent decisions.', build: frag(secNightShift) },
       { id: 'permissions', label: 'PERMISSIONS', glyph: '⊘', desc: 'Set access and approval rules for the station or individual agents.', build: frag(secPermissions) },

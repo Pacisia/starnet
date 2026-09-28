@@ -9,7 +9,7 @@ window.OverseerSetup = (() => {
     grok: ['Grok','Sign in'], kimi: ['Kimi','Sign in'], openrouter: ['OpenRouter','API key'],
     openai: ['OpenAI','ChatGPT or API key'], anthropic: ['Anthropic','API key'], gemini: ['Gemini','API key'],
     ollama: ['Ollama','Free · local'], xai: ['xAI','API key'], groq: ['Groq','API key'],
-    mistral: ['Mistral','API key'], deepseek: ['DeepSeek','API key'], together: ['Together','API key'],
+    mistral: ['Mistral','API key'], deepseek: ['DeepSeek','API key'], mimo: ['Xiaomi MiMo','Token Plan key'], together: ['Together','API key'],
     fireworks: ['Fireworks','API key'], perplexity: ['Perplexity','API key'], cerebras: ['Cerebras','API key'],
     custom: ['Custom','Your endpoint']
   };
