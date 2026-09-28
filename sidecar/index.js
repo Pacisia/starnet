@@ -9548,7 +9548,7 @@ const ROUTES = [
   { m: 'POST', exact: '/api/auth/codex-b/poll', h: handleCodexBPoll },
   { m: 'GET', exact: '/api/auth/codex-b/status', h: handleCodexBStatus },
   { m: 'POST', exact: '/api/auth/codex-b/logout', h: handleCodexBLogout },
-  { m: 'GET', exact: '/api/accounts', h: handleAccountsOverview },
+  { m: 'GET', qsplit: '/api/accounts', h: handleAccountsOverview },   // qsplit: allows ?refresh=1
   { m: 'POST', exact: '/api/accounts/pins', h: handleAccountPins },
   { m: 'GET', exact: '/api/connectors/catalog', h: handleConnectorCatalog },
   { m: 'POST', exact: '/api/connectors/oauth/start', h: handleConnectorOauthStart },
