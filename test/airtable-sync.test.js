@@ -1,0 +1,22 @@
+'use strict';
+const assert = require('assert');
+const { createSync } = require('../sidecar/airtable-sync.js');
+(async () => {
+  const calls = [];
+  const s = createSync({ token: 't', request: async (m, path, tok, body) => { calls.push({ path, body }); return { status: 200 }; } });
+  s.observe('agent.run.start', { agentId: 'a1', runId: 'r1', trigger: 'directive', model: 'claude-opus-5-5' });
+  s.observe('taskbrief.settled', { agentId: 'a1', runId: 'r1', objective: 'Work on RBL-043 stock check' });
+  s.observe('agent.tool_call', { agentId: 'a1', runId: 'r1', callId: 'c', name: 'web.fetch' });
+  s.observe('agent.cost', { agentId: 'a1', runId: 'r1', usd: 0.01, tokensIn: 100, tokensOut: 50, reconciled: true });
+  s.observe('permission.prompt', { promptId: 'p', agentId: 'a1', tool: 'shell', scope: 'once' });
+  await s.flush();
+  const ag = calls[0].body.records[0].fields;
+  assert.strictEqual(ag.State, 'waiting approval'); assert.strictEqual(ag['Tokens Today'], 150);
+  s.observe('agent.run.end', { agentId: 'a1', runId: 'r1', reason: 'done', turns: 3, usd: 0.01 });
+  await s.flush();
+  const run = calls.find(c => c.path.includes('tbliDOg976JAnnRY3')).body.records[0].fields;
+  assert.strictEqual(run['Pacisia Task ID'], 'RBL-043'); assert.strictEqual(run['Tool Calls'], 1); assert.strictEqual(run.Outcome, 'done');
+  const off = createSync({ token: '', request: async () => { throw new Error('should not call'); } });
+  off.observe('agent.run.start', { agentId: 'x', runId: 'y' }); await off.flush();
+  console.log('airtable-sync ok');
+})().catch(e => { console.error(e); process.exit(1); });

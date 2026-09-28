@@ -21,6 +21,7 @@ const connectorVault = connectorVaultMod.makeConnectorVault({ fs, path,
 delete process.env.STARNET_CONNECTOR_ENCRYPTION_KEY;
 
 const { runAgentLoop, _internals: LoopInternals } = require('./loop.js');
+const AirtableSync = require('./airtable-sync.js');   // Pacisia: Airtable mirror of agents/runs (fail-open, off without token)
 const DomainTask = require('./domain-task.js');
 const ImageTask = require('./image-task.js');
 const { makeCostEngine } = require('./cost.js');
@@ -1256,6 +1257,7 @@ function proxySnapshot() {
 function wrapEmitDiag(emitFn) {
   return function (name, payload) {
     try { if (name === 'agent.run.error' && payload && payload.message) recordDiagError(payload.message, payload.ts, payload.runId); } catch (_) {}
+    try { AirtableSync.observe(name, payload); } catch (_) {}   // Pacisia: Airtable mirror (fail-open)
     return emitFn(name, payload);
   };
 }
@@ -9747,6 +9749,7 @@ server.on('error', (e) => {
   process.exit(1);
 });
 server.listen(PORT, '127.0.0.1', () => {
+  try { AirtableSync.start(); } catch (_) {}
   const url = 'http://127.0.0.1:' + PORT;
   const bar = '═'.repeat(58);
   console.log('\n' + bar);

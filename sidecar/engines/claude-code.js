@@ -197,7 +197,18 @@ function makeStreamMapper(o) {
         return;
       case 'stream_event': {
         const ev = e.event || {};
-        if (ev.type === 'message_start') { st.turns++; st.turnText = ''; st.sawPartialText = false; }
+        if (ev.type === 'message_start') {
+          st.turns++; st.turnText = ''; st.sawPartialText = false;
+          // CONTEXT FIX: the CLI's final result.usage is the SUM of every turn in the run, not what the model
+          // held. The UI calibrates its context gauge from the run's FIRST cost event, so report the first
+          // turn's real prompt size here (contextOnly: excluded from token totals, never double-counted).
+          const mu = ev.message && ev.message.usage;
+          if (mu) {
+            const turnIn = (mu.input_tokens || 0) + (mu.cache_read_input_tokens || 0) + (mu.cache_creation_input_tokens || 0);
+            st.lastTurnIn = turnIn;
+            if (st.turns === 1 && turnIn > 0 && emit) emit('agent.cost', { agentId, runId, usd: 0, reconciled: false, contextOnly: true, model: st.model || undefined, tokensIn: turnIn, tokensOut: 0, reasoningTokens: 0, cachedTokens: mu.cache_read_input_tokens || 0 });
+          }
+        }
         else if (ev.type === 'content_block_start' && ev.content_block && ev.content_block.type === 'thinking') reasoning(true);
         else if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') { st.sawPartialText = true; token(ev.delta.text); }
         return;
@@ -253,7 +264,7 @@ function makeStreamMapper(o) {
       subtype: r ? r.subtype : null,
       errorText: st.errorText || (r && r.is_error ? String(r.result || r.subtype || 'error') : ''),
       equivalentUsd: (r && typeof r.total_cost_usd === 'number') ? r.total_cost_usd : 0,
-      usage: { tokensIn, tokensOut, reasoningTokens, cachedTokens: u.cache_read_input_tokens || 0 },
+      usage: { tokensIn, tokensOut, reasoningTokens, cachedTokens: u.cache_read_input_tokens || 0, lastTurnIn: st.lastTurnIn || 0 },
       model: st.model
     };
   }
@@ -515,7 +526,8 @@ async function runClaudeCodeEngine(o) {
     const tokens = r.usage.tokensIn + r.usage.tokensOut;
     emit('agent.cost', {
       agentId, runId, usd: 0, reconciled: true, model: r.model || model,
-      tokensIn: r.usage.tokensIn, tokensOut: r.usage.tokensOut, reasoningTokens: r.usage.reasoningTokens, cachedTokens: r.usage.cachedTokens
+      tokensIn: r.usage.tokensIn, tokensOut: r.usage.tokensOut, reasoningTokens: r.usage.reasoningTokens, cachedTokens: r.usage.cachedTokens,
+      contextTokens: r.usage.lastTurnIn || 0   // what the model actually held on its last turn (tokensIn is the run's cumulative sum)
     });
     let reason = 'done';
     if (cancelled) reason = 'cancelled';

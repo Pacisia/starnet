@@ -1630,7 +1630,9 @@ const Chat = (() => {
     limit = Math.max(0, Number(limit) || 0);
     if (!limit) return null;   // unknown catalog => never invent a ceiling
     const projected = Math.max(0, Number(projectedUsed) || 0);
-    if (projected >= limit * 0.9) return { limit, used: projected, projected: true };
+    // AUTO-COMPACT: a projected-full history is not a reason to refuse a send. The Claude Code engine compacts
+    // its own session when it nears the window, so only a paste that cannot fit on its own is held back below.
+    if (projected >= limit * 0.9 && typeof StationUI !== 'undefined' && StationUI.notify) StationUI.notify('chat is near its context limit — older turns will be compacted automatically', 'info');
     // No calibrated overhead yet. Reserve up to 16K tokens (and never more than half the window) for the real
     // system/tool prompt, then apply the Unicode-aware dialogue estimate. Keep this second check even when a
     // calibrated char/4 projection exists: dense Unicode is exactly where that projection can be too optimistic.

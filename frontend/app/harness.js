@@ -53,7 +53,7 @@ const Harness = (() => {
      is a real past measurement, it is only ever used to produce a tilde-marked projection, and the very
      next turn overwrites it — so a system-prompt or toolset change (which does move the overhead)
      self-corrects on first use rather than persisting a lie. */
-  const LS_OVERHEAD = 'starnet.ctx.overhead';
+  const LS_OVERHEAD = 'starnet.ctx.overhead.v2';   // v2: drops calibrations inflated by Claude Code's cumulative usage
   const OVERHEAD_MAX = 40;   // bounded: a few models per provider, never an unbounded localStorage row
   // Each entry is CtxGauge.calibrate's { overhead } fit. A stored entry that is not a usable fit is
   // DROPPED, not coerced — a half-read calibration would silently bias every projection it feeds.
@@ -126,7 +126,7 @@ const Harness = (() => {
     const baseline = firstOfRun ? payload.tokensIn
       : ((prev && prev.runId === (payload.runId || '')) ? prev.baseline : 0);
     contextByKey[key] = {
-      used: payload.tokensIn, model: m, runId: payload.runId || '',
+      used: (payload.contextTokens > 0 ? payload.contextTokens : payload.tokensIn), model: m, runId: payload.runId || '',
       sentEstimate: reg ? reg.sentEstimate : -1, baseline: baseline || 0, live: true
     };
   }
@@ -830,7 +830,7 @@ const Harness = (() => {
           // real summonAgent() and POSTs /api/summon/ack with the new id (Harness.summonAck), resolving the tool.
           case 'crew.summon.request': onSummon && onSummon(payload); break;
           case 'agent.cost':
-            totals.tokens += (payload.tokensIn || 0) + (payload.tokensOut || 0);
+            if (!payload.contextOnly) totals.tokens += (payload.tokensIn || 0) + (payload.tokensOut || 0);
             totals.cost += payload.usd || 0;
             // The newest prompt_tokens is the live context reading for this event's agent/model. The
             // U.bus subscription (foldContextCost) already saw this payload via the re-emit above;
