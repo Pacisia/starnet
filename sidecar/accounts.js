@@ -58,6 +58,11 @@ function makeAccountRouter(opts) {
     if (accts.length === 1) { sticky.set(k(provider, agentId), accts[0]); return accts[0]; }
     const key = k(provider, agentId);
     let cur = sticky.get(key);
+    // A PINNED agent always goes home to its pinned account when that account is available and not resting.
+    if (preferred && accts.indexOf(preferred) >= 0 && !coolingUntil(provider, preferred)) {
+      sticky.set(key, preferred);
+      return preferred;
+    }
     if (!cur || accts.indexOf(cur) < 0) {
       if (preferred && accts.indexOf(preferred) >= 0 && !coolingUntil(provider, preferred)) cur = preferred;
       else {

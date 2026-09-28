@@ -55,16 +55,43 @@ const AccountsPanel = (function () {
         '<div class="key-edit" id="acct-gb-box" hidden><span class="dim" id="acct-gb-status"></span> <code class="key-mask" id="acct-gb-code" hidden></code> <button class="bb sm" id="acct-gb-open" hidden>↗ OPEN PAGE</button></div>' +
         '<div class="key-meta">' + routingLine(g.routing) + '</div>' +
       '</div></div>' +
+      pinsHtml(d) +
       '<div><div class="key-prov">RECENT SWITCHES</div>' + (sw ? '<ul class="dim">' + sw + '</ul>' : '<p class="dim">none yet</p>') + '</div>' +
       '<button class="bb sm" data-acct="refresh">↻ RECHECK</button>' +
       '</div>';
     wire(el);
+  }
+  function pinsHtml(d) {
+    const agents = d.agents || [], pins = d.pins || {};
+    if (!agents.length) return '';
+    const counts = { A: 0, B: 0, auto: 0 };
+    agents.forEach(a => { counts[pins[a.agentId] || 'auto']++; });
+    const rows = agents.map(a => {
+      const v = pins[a.agentId] || '';
+      const opt = (val, label) => '<option value="' + val + '"' + (v === val ? ' selected' : '') + '>' + label + '</option>';
+      return '<tr><td>' + esc(a.name) + '</td><td class="dim">' + esc(a.provider === 'codex' ? 'ChatGPT' : 'Claude') + '</td>' +
+        '<td><select data-pin="' + esc(a.agentId) + '">' + opt('', 'auto') + opt('A', 'A') + opt('B', 'B') + '</select></td></tr>';
+    }).join('');
+    return '<div><div class="key-prov">WHICH ACCOUNT EACH AGENT USES</div>' +
+      '<p class="dim">Pinned agents use their account and only borrow the other while theirs is resting. ' +
+      'Now: ' + counts.A + ' on A, ' + counts.B + ' on B, ' + counts.auto + ' automatic.</p>' +
+      '<table class="dim" style="width:100%">' + rows + '</table>' +
+      '<button class="bb sm" data-acct="pins-save">SAVE</button> <span class="dim" id="acct-pins-msg"></span></div>';
   }
   function wire(el) {
     el.querySelectorAll('[data-acct]').forEach(b => b.addEventListener('click', ev => {
       ev.stopPropagation();
       const act = b.dataset.acct;
       if (act === 'refresh') return load(el, true);
+      if (act === 'pins-save') {
+        const pins = {};
+        el.querySelectorAll('select[data-pin]').forEach(s => { pins[s.dataset.pin] = s.value; });
+        const msg = el.querySelector('#acct-pins-msg');
+        fetch('/api/accounts/pins', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pins }) })
+          .then(r => r.ok ? load(el, false) : (msg && (msg.textContent = 'could not save')))
+          .catch(() => { if (msg) msg.textContent = 'could not save'; });
+        return;
+      }
       if (act === 'cc-copy') {
         const t = (el.querySelector('#acct-cc-cmd') || {}).textContent || '';
         try { navigator.clipboard.writeText(t); b.textContent = 'COPIED'; } catch (_) {}

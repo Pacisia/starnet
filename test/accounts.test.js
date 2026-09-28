@@ -32,6 +32,13 @@ assert.ok(isRateLimitMessage('429 Too Many Requests'));
 assert.ok(!isRateLimitMessage('file not found'));
 assert.strictEqual(retryAfterMs('try again in 2h 15m'), 2 * 3600000 + 15 * 60000);
 assert.strictEqual(retryAfterMs('retry after 90 seconds'), 90000);
+// pinned agent: stays on its pin, moves away only while the pin rests, then goes home
+const r2 = makeAccountRouter({ clock, cooldownMs: 60000 });
+assert.strictEqual(r2.pick('codex', 'lp1', ['A', 'B'], 'B'), 'B');
+r2.penalize('codex', 'B');
+assert.strictEqual(r2.pick('codex', 'lp1', ['A', 'B'], 'B'), 'A');
+now += 61000;
+assert.strictEqual(r2.pick('codex', 'lp1', ['A', 'B'], 'B'), 'B');
 console.log('accounts.test.js ok');
 // Claude Code engine: account B = CLAUDE_CONFIG_DIR, account A = no override
 const cc = require('../sidecar/engines/claude-code.js');

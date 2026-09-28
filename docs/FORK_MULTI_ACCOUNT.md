@@ -28,3 +28,10 @@ Branch: `feat/multi-account`. Adds a second Claude Code login, a second ChatGPT 
 ## Build
 The release app bundles the sidecar, so rebuild after pulling this branch: `npm run desktop:build`
 (the MiMo keychain slot needs the Rust change in `src-tauri/src/credentials.rs`).
+
+## Choosing accounts per agent (pins)
+- Settings ▸ ACCOUNTS ▸ "Which account each agent uses": set each agent to A, B or auto, then SAVE.
+- Or tell the lead agent to write `<workspaces>/accounts.pins.json` (on Dylan's Mac: `~/starnet-data/accounts.pins.json`), e.g.
+  `{"version":1,"pins":{"luna-producer-1":"A","luna-producer-2":"A","luna-producer-3":"A","luna-producer-4":"A","luna-producer-5":"B","luna-producer-6":"B","luna-producer-7":"B"}}`
+  StarNet re-reads the file on the next run; no restart needed.
+- A pinned agent borrows the other account only while its own is resting after a usage limit, then goes back.

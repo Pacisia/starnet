@@ -3704,8 +3704,33 @@ function claudeConfigDirFor(acct) { return acct === 'B' ? CLAUDE_B_DIR : ''; }
 const accountRouter = Accounts.makeAccountRouter({
   onSwitch: (ev) => console.log('[accounts] ' + ev.provider + ' agent ' + ev.agentId + ' moved from account ' + ev.from + ' to ' + ev.to + ' (usage limit)')
 });
-// Which account an agent is pinned to, if the roster says so (optional field `account: "A" | "B"`).
-function pinnedAccountFor(agentId) { try { const r = agentRoster.get(String(agentId || '')); const a = r && String(r.account || '').toUpperCase(); return a === 'A' || a === 'B' ? a : ''; } catch (_) { return ''; } }
+// Account PINS: agentId -> 'A' | 'B'. Set from Settings > ACCOUNTS (or POST /api/accounts/pins). A pinned agent
+// runs on its pinned account and only borrows the other one while its own is resting after a usage limit.
+const ACCOUNT_PINS_FILE = path.join(WORKSPACES, 'accounts.pins.json');
+let accountPins = {};
+try { const raw = loadResilient(ACCOUNT_PINS_FILE, 'account-pins'); if (raw && typeof raw === 'object' && raw.pins) accountPins = raw.pins; } catch (_) {}
+function saveAccountPins() { try { saveResilient(ACCOUNT_PINS_FILE, { version: 1, pins: accountPins }); try { accountPinsMtime = fs.statSync(ACCOUNT_PINS_FILE).mtimeMs; } catch (_) {} return true; } catch (e) { console.warn('[accounts] pins not saved:', (e && e.message) || e); return false; } }
+// The lead agent (or you) can also edit accounts.pins.json directly; it is re-read whenever the file changes.
+let accountPinsMtime = 0;
+function reloadAccountPinsIfChanged() {
+  try {
+    const m = fs.statSync(ACCOUNT_PINS_FILE).mtimeMs;
+    if (m === accountPinsMtime) return;
+    accountPinsMtime = m;
+    const raw = JSON.parse(fs.readFileSync(ACCOUNT_PINS_FILE, 'utf8'));
+    const src = raw && typeof raw === 'object' ? (raw.pins && typeof raw.pins === 'object' ? raw.pins : raw) : {};
+    const next = {};
+    for (const [id, v] of Object.entries(src)) { const x = String(v || '').toUpperCase(); if (/^[A-Za-z0-9_-]{1,40}$/.test(id) && (x === 'A' || x === 'B')) next[id] = x; }
+    accountPins = next;
+  } catch (_) { /* missing or mid-write: keep the last good pins */ }
+}
+function pinnedAccountFor(agentId) {
+  reloadAccountPinsIfChanged();
+  const id = String(agentId || '');
+  const p = String(accountPins[id] || '').toUpperCase();
+  if (p === 'A' || p === 'B') return p;
+  try { const raw = agentRosterRaw.get(id); const a = raw && String(raw.account || '').toUpperCase(); return a === 'A' || a === 'B' ? a : ''; } catch (_) { return ''; }
+}
 
 // ---- Grok / Kimi (subscription) device-OAuth — the SAME protected-sibling posture as the codex tokens above:
 //      tokens live ONLY in WORKSPACES/<id>/tokens.json (out of the fs jail) and NEVER ride the event bus.
@@ -9524,6 +9549,7 @@ const ROUTES = [
   { m: 'GET', exact: '/api/auth/codex-b/status', h: handleCodexBStatus },
   { m: 'POST', exact: '/api/auth/codex-b/logout', h: handleCodexBLogout },
   { m: 'GET', exact: '/api/accounts', h: handleAccountsOverview },
+  { m: 'POST', exact: '/api/accounts/pins', h: handleAccountPins },
   { m: 'GET', exact: '/api/connectors/catalog', h: handleConnectorCatalog },
   { m: 'POST', exact: '/api/connectors/oauth/start', h: handleConnectorOauthStart },
   { m: 'POST', exact: '/api/connectors/oauth/device/poll', h: handleConnectorDevicePoll },
@@ -20064,10 +20090,30 @@ async function handleAccountsOverview(req, res) {
       B: { connected: codexB.connected() },
       routing: accountRouter.status('codex', codexAccountsAvailable())
     },
-    switches: accountRouter.recentSwitches()
+    switches: accountRouter.recentSwitches(),
+    pins: Object.assign({}, accountPins),
+    agents: Array.from(agentRoster.entries()).map(([id, a]) => ({ agentId: id, name: a.name || id, provider: a.provider || '' }))
+      .filter(a => a.provider === 'codex' || a.provider === 'claude-code')
   };
   res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(body));
+}
+
+// POST /api/accounts/pins { pins: { agentId: 'A'|'B'|'' } } — merge; '' removes a pin (back to automatic).
+async function handleAccountPins(req, res) {
+  const json = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(obj)); };
+  let body; try { body = JSON.parse(await readBody(req, 1 << 16)) || {}; } catch (e) { return json(400, { error: 'bad json' }); }
+  const incoming = body && typeof body.pins === 'object' ? body.pins : {};
+  const next = Object.assign({}, accountPins);
+  for (const [id, v] of Object.entries(incoming)) {
+    if (!/^[A-Za-z0-9_-]{1,40}$/.test(id)) continue;
+    const a = String(v || '').toUpperCase();
+    if (a === 'A' || a === 'B') next[id] = a; else delete next[id];
+  }
+  accountPins = next;
+  if (!saveAccountPins()) return json(500, { error: 'pins could not be saved' });
+  console.log('[accounts] pins updated: ' + JSON.stringify(accountPins));
+  json(200, { pins: accountPins });
 }
 
 // POST /api/auth/codex/logout — forget the stored ChatGPT credentials.
