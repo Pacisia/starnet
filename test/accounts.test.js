@@ -45,3 +45,20 @@ const cc = require('../sidecar/engines/claude-code.js');
 assert.strictEqual(cc.withConfigDir({ PATH: '/bin' }, '/Users/x/.claude-b').CLAUDE_CONFIG_DIR, '/Users/x/.claude-b');
 assert.strictEqual(cc.withConfigDir({ PATH: '/bin', CLAUDE_CONFIG_DIR: '/stale' }, '').CLAUDE_CONFIG_DIR, undefined);
 console.log('accounts.test.js claude config-dir ok');
+// airtable-sync: account rows + run Account field
+(async () => {
+  const { createSync } = require('../sidecar/airtable-sync.js');
+  const calls = [];
+  const s = createSync({ token: 'x', request: async (m, path, t, body) => { calls.push({ path, body }); return { status: 200 }; } });
+  s.observe('agent.run.start', { agentId: 'lp1', runId: 'r1', model: 'gpt-6-luna' });
+  s.observe('agent.account', { agentId: 'lp1', runId: 'r1', provider: 'codex', account: 'B' });
+  s.observe('agent.cost', { agentId: 'lp1', runId: 'r1', tokensIn: 100, tokensOut: 20 });
+  s.observe('agent.run.end', { agentId: 'lp1', runId: 'r1', reason: 'done' });
+  s.observe('accounts.usage', { list: [{ provider: 'codex', account: 'B', signedIn: true, plan: 'plus', short: { used: 0.42, label: '5 hours', resetsAt: Date.now() + 3600e3 }, weekly: { used: 0.9, resetsAt: Date.now() + 86400e3 }, status: 'ok', source: 'chatgpt usage api' }] });
+  await s.flush();
+  const runs = calls.find(c => /tbliDOg976JAnnRY3/.test(c.path)).body.records[0].fields;
+  assert.strictEqual(runs.Account, 'B');
+  const acct = calls.find(c => /tblj4XsY7qz3KT5uJ/.test(c.path)).body.records[0].fields;
+  assert.strictEqual(acct.Key, 'ChatGPT B'); assert.strictEqual(acct['Short Window Used'], 0.42); assert.strictEqual(acct['Tokens Today'], 120); assert.strictEqual(acct['Runs Today'], 1);
+  console.log('accounts.test.js airtable rows ok');
+})().catch(e => { console.error(e); process.exit(1); });

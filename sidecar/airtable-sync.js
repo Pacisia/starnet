@@ -20,6 +20,7 @@ const TOKEN = process.env.STARNET_AIRTABLE_TOKEN || process.env.AIRTABLE_TOKEN |
 const BASE = process.env.STARNET_AIRTABLE_BASE || 'appzAlEvhohmE2rbA';
 const AGENTS_TABLE = process.env.STARNET_AIRTABLE_AGENTS || 'tblQlVnACbyLJYhUA';
 const RUNS_TABLE = process.env.STARNET_AIRTABLE_RUNS || 'tbliDOg976JAnnRY3';
+const ACCOUNTS_TABLE = process.env.STARNET_AIRTABLE_ACCOUNTS || 'tblj4XsY7qz3KT5uJ';   // Dylan's fork: per-account usage
 const FLUSH_MS = Math.max(10000, Number(process.env.STARNET_AIRTABLE_FLUSH_MS) || 30000);
 const HOST = (os.hostname() || 'mac').slice(0, 60);
 const TASK_ID_RE = /\b(?:PAC|RBL|NEW|SPR|SYS|BDR|S100)-[A-Z0-9]+(?:-[A-Z0-9]+)?\b/;
@@ -35,6 +36,16 @@ function createSync(opts = {}) {
   const runs = new Map();     // runId -> in-flight run
   const doneRuns = [];        // finished runs waiting to be written
   const dirty = new Set();
+  const runAccount = new Map();   // runId -> { provider, account }
+  const acctDay = new Map();      // 'codex|A' -> { day, runs, tokens }
+  let acctSnapshot = null;        // latest accounts.usage list
+  let acctDirty = false;
+  function acctStat(key) {
+    const day = sydneyDay(now());
+    let s = acctDay.get(key);
+    if (!s || s.day !== day) { s = { day, runs: 0, tokens: 0 }; acctDay.set(key, s); }
+    return s;
+  }
   let lastErrLog = 0;
 
   function agent(id) {
@@ -68,8 +79,19 @@ function createSync(opts = {}) {
           const r = runs.get(p.runId); if (r) r.tools++;
           break;
         }
+        case 'agent.account': {
+          runAccount.set(p.runId, { provider: String(p.provider || ''), account: String(p.account || '') });
+          const r = runs.get(p.runId); if (r) r.account = String(p.account || '');
+          acctStat(p.provider + '|' + p.account).runs++; acctDirty = true;
+          break;
+        }
+        case 'accounts.usage': {
+          acctSnapshot = Array.isArray(p.list) ? p.list : null; acctDirty = true;
+          break;
+        }
         case 'agent.cost': {
           const t = (p.tokensIn || 0) + (p.tokensOut || 0);
+          const ra = runAccount.get(p.runId); if (ra) { acctStat(ra.provider + '|' + ra.account).tokens += t; acctDirty = true; }
           const a = agent(id); a.tokens += t; a.usd += Number(p.usd) || 0;
           const r = runs.get(p.runId); if (r) r.tokens += t;
           break;
@@ -93,6 +115,7 @@ function createSync(opts = {}) {
           a.runs++; a.runId = ''; a.approval = '';
           const r = runs.get(p.runId) || { runId: p.runId, agentId: id, trigger: '', model: a.model, objective: '', tools: 0, tokens: 0, started: null, error: '' };
           runs.delete(p.runId);
+          const ra = runAccount.get(p.runId); if (ra) { r.account = ra.account; runAccount.delete(p.runId); }
           doneRuns.push(Object.assign(r, { reason: p.reason, turns: p.turns, usd: p.usd, finished: now() }));
           break;
         }
@@ -127,10 +150,25 @@ function createSync(opts = {}) {
     const runRows = runBatch.map(r => { const m = TASK_ID_RE.exec(r.objective || ''); return { fields: {
       'Run ID': r.runId, 'Agent ID': r.agentId, 'Trigger': r.trigger || '', 'Model': r.model || '', 'Objective': r.objective,
       'Outcome': r.reason, 'Turns': r.turns || 0, 'Tool Calls': r.tools, 'USD': Number(r.usd) || 0, 'Tokens': r.tokens,
-      'Started': iso(r.started), 'Finished': iso(r.finished), 'Error': r.error, 'Pacisia Task ID': m ? m[0] : ''
+      'Started': iso(r.started), 'Finished': iso(r.finished), 'Error': r.error, 'Pacisia Task ID': m ? m[0] : '', 'Account': r.account || ''
     } }; });
     dirty.clear();
+    let acctRows = [];
+    if (acctDirty && acctSnapshot) {
+      acctDirty = false;
+      const pct = (w) => (w && w.used != null ? Math.round(w.used * 1000) / 1000 : null);
+      acctRows = acctSnapshot.map(a => { const st = acctStat(a.provider + '|' + a.account); return { fields: {
+        'Key': (a.provider === 'codex' ? 'ChatGPT ' : 'Claude ') + a.account,
+        'Provider': a.provider === 'codex' ? 'ChatGPT' : 'Claude', 'Account': a.account, 'Plan': a.plan || '',
+        'Signed In': !!a.signedIn,
+        'Short Window Used': pct(a.short), 'Short Window Label': (a.short && a.short.label) || '', 'Short Window Resets': iso(a.short && a.short.resetsAt),
+        'Weekly Used': pct(a.weekly), 'Weekly Resets': iso(a.weekly && a.weekly.resetsAt),
+        'Status': a.status || '', 'Resting Until': iso(a.restingUntil), 'Runs Today': st.runs, 'Tokens Today': st.tokens,
+        'Usage Source': a.source || '', 'Updated': iso(now())
+      } }; });
+    }
     try {
+      if (acctRows.length) await upsert(ACCOUNTS_TABLE, 'Key', acctRows);
       if (agentRows.length) await upsert(AGENTS_TABLE, 'Agent ID', agentRows);
       if (runRows.length) await upsert(RUNS_TABLE, 'Run ID', runRows);
     } catch (e) {

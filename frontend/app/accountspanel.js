@@ -24,6 +24,18 @@ const AccountsPanel = (function () {
     return (list || []).map(r => 'account ' + esc(r.account) + ': ' + r.agents + ' agent' + (r.agents === 1 ? '' : 's') +
       (r.coolingUntil ? ' · <b>resting ' + when(r.coolingUntil) + '</b> (hit its limit)' : '')).join(' &nbsp;|&nbsp; ');
   }
+  function usageLine(d, provider, acct) {
+    const u = (d.usage || []).find(x => x.provider === provider && x.account === acct);
+    if (!u || (!u.short && !u.weekly)) return '<div class="key-meta dim">&nbsp;&nbsp;usage: no reading yet (appears after its first run' + (provider === 'codex' ? ' or within 5 min' : '') + ')</div>';
+    const bar = (w, label) => {
+      if (!w) return '';
+      const p = Math.round((w.used || 0) * 100);
+      const col = p >= 90 ? '#f85149' : p >= 70 ? '#d29922' : '#3fb950';
+      return label + ' <b style="color:' + col + '">' + p + '%</b>' + (w.resetsAt ? ' (resets ' + when(w.resetsAt) + ')' : '');
+    };
+    return '<div class="key-meta">&nbsp;&nbsp;' + [bar(u.short, (u.short && u.short.label) || 'short window'), bar(u.weekly, 'weekly')].filter(Boolean).join(' · ') +
+      (u.plan ? ' · plan ' + esc(u.plan) : '') + '</div>';
+  }
   function render(el, d) {
     const c = d.claude || {}, g = d.chatgpt || {};
     const sw = (d.switches || []).slice(-5).reverse().map(s =>
@@ -35,9 +47,9 @@ const AccountsPanel = (function () {
       // Claude
       '<div class="key-row"><div class="key-main">' +
         '<div class="key-top"><span class="key-prov">CLAUDE CODE</span></div>' +
-        '<div class="key-meta">' + dot(c.A && c.A.connected) + ' Account A (your normal <code>claude</code> login) — ' + (c.A && c.A.connected ? 'signed in' : 'not signed in') + '</div>' +
+        '<div class="key-meta">' + dot(c.A && c.A.connected) + ' Account A (your normal <code>claude</code> login) — ' + (c.A && c.A.connected ? 'signed in' : 'not signed in') + '</div>' + usageLine(d, 'claude-code', 'A') +
         '<div class="key-meta">' + dot(c.B && c.B.connected) + ' Account B — ' +
-          (c.B && c.B.connected ? 'signed in' : (c.B && c.B.setUp ? 'folder found, not signed in' : 'not set up')) + '</div>' +
+          (c.B && c.B.connected ? 'signed in' : (c.B && c.B.setUp ? 'folder found, not signed in' : 'not set up')) + '</div>' + usageLine(d, 'claude-code', 'B') +
         (c.B && c.B.connected ? '' :
           '<div class="key-meta dim">To add account B, run this once in Terminal, then type <code>/login</code> and sign in with the second Claude account:<br>' +
           '<code class="key-mask" id="acct-cc-cmd">' + esc((c.B && c.B.signInCommand) || 'CLAUDE_CONFIG_DIR=~/.claude-b claude') + '</code> ' +
@@ -47,11 +59,11 @@ const AccountsPanel = (function () {
       // ChatGPT
       '<div class="key-row"><div class="key-main">' +
         '<div class="key-top"><span class="key-prov">CHATGPT (CODEX)</span></div>' +
-        '<div class="key-meta">' + dot(g.A && g.A.connected) + ' Account A — ' + (g.A && g.A.connected ? 'signed in' : 'not signed in (use PROVIDERS)') + '</div>' +
+        '<div class="key-meta">' + dot(g.A && g.A.connected) + ' Account A — ' + (g.A && g.A.connected ? 'signed in' : 'not signed in (use PROVIDERS)') + '</div>' + usageLine(d, 'codex', 'A') +
         '<div class="key-meta">' + dot(g.B && g.B.connected) + ' Account B — ' + (g.B && g.B.connected ? 'signed in' : 'not signed in') + ' ' +
           (g.B && g.B.connected
             ? '<button class="bb sm danger" data-acct="gb-logout">✕ DISCONNECT B</button>'
-            : '<button class="bb sm" data-acct="gb-signin">SIGN IN ACCOUNT B</button>') + '</div>' +
+            : '<button class="bb sm" data-acct="gb-signin">SIGN IN ACCOUNT B</button>') + '</div>' + usageLine(d, 'codex', 'B') +
         '<div class="key-edit" id="acct-gb-box" hidden><span class="dim" id="acct-gb-status"></span> <code class="key-mask" id="acct-gb-code" hidden></code> <button class="bb sm" id="acct-gb-open" hidden>↗ OPEN PAGE</button></div>' +
         '<div class="key-meta">' + routingLine(g.routing) + '</div>' +
       '</div></div>' +

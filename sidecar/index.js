@@ -3701,6 +3701,86 @@ function claudeAccountsAvailable() {
   return hasB ? ['A', 'B'] : ['A'];
 }
 function claudeConfigDirFor(acct) { return acct === 'B' ? CLAUDE_B_DIR : ''; }
+// ---- Account USAGE (Dylan's fork): live plan usage per account, for Settings, Airtable and Control Lite ----
+//   Claude: read from the CLI's own `rate_limit_event` stream lines (5-hour + weekly utilization, resets).
+//   ChatGPT: polled from chatgpt.com/backend-api/wham/usage with that account's token (primary + secondary
+//   windows). Percentages only; never a credential. An account at 100% or 'rejected' is rested until reset.
+const accountUsage = {};   // 'claude-code|A' -> { plan, short:{used,label,resetsAt}, weekly:{used,resetsAt}, status, updated, source }
+function usageKey(provider, acct) { return provider + '|' + acct; }
+function recordClaudeUsage(acct, info) {
+  try {
+    const w = info.unifiedWindows || {};
+    const f = w.five_hour || (info.rateLimitType === 'five_hour' ? { utilization: info.utilization, resetsAt: info.resetsAt } : null);
+    const s = w.seven_day || (info.rateLimitType === 'seven_day' ? { utilization: info.utilization, resetsAt: info.resetsAt } : null);
+    const prev = accountUsage[usageKey('claude-code', acct)] || {};
+    const u = {
+      plan: prev.plan || '',
+      short: f ? { used: Number(f.utilization) || 0, label: '5 hours', resetsAt: f.resetsAt ? f.resetsAt * 1000 : null } : prev.short || null,
+      weekly: s ? { used: Number(s.utilization) || 0, resetsAt: s.resetsAt ? s.resetsAt * 1000 : null } : prev.weekly || null,
+      status: String(info.status || ''), updated: Date.now(), source: 'claude stream'
+    };
+    accountUsage[usageKey('claude-code', acct)] = u;
+    restIfSpent('claude-code', acct, u);
+    try { AirtableSync.observe('accounts.usage', { list: accountsUsageSnapshot() }); } catch (_) {}
+  } catch (_) {}
+}
+function restIfSpent(provider, acct, u) {
+  const spent = [u.short, u.weekly].filter(w => w && w.used >= 0.999);
+  if (u.status === 'rejected' || spent.length) {
+    const until = Math.max(...spent.map(w => w.resetsAt || 0), 0) || (Date.now() + Accounts.DEFAULT_COOLDOWN_MS);
+    const ms = Math.max(60000, until - Date.now());
+    accountRouter.penalize(provider, acct, 'retry after ' + Math.round(ms / 1000) + ' seconds');
+  }
+}
+function jwtClaims(tok) { try { return JSON.parse(Buffer.from(String(tok).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')); } catch (_) { return {}; } }
+async function refreshCodexUsage(acct) {
+  const fns = codexFnsFor(acct);
+  let token;
+  try { token = await fns.ensure(); } catch (_) { return; }
+  const claims = jwtClaims(token);
+  const auth = claims['https://api.openai.com/auth'] || {};
+  const headers = { Authorization: 'Bearer ' + token, Accept: 'application/json', 'User-Agent': 'starnet-usage/1.0' };
+  if (auth.chatgpt_account_id) headers['ChatGPT-Account-Id'] = String(auth.chatgpt_account_id);
+  try {
+    const r = await globalThis.fetch('https://chatgpt.com/backend-api/wham/usage', { headers, signal: AbortSignal.timeout(15000) });
+    if (!r.ok) return;
+    const j = await r.json();
+    const rl = (j && j.rate_limit) || {};
+    const win = (w) => w ? {
+      used: Math.max(0, Number(w.used_percent != null ? w.used_percent : w.usedPercent) || 0) / 100,
+      label: w.limit_window_seconds ? (w.limit_window_seconds >= 86400 ? Math.round(w.limit_window_seconds / 86400) + ' days' : Math.round(w.limit_window_seconds / 3600) + ' hours') : '',
+      resetsAt: (w.reset_at || w.resetAt) ? (w.reset_at || w.resetAt) * 1000 : null
+    } : null;
+    const u = { plan: String(j.plan_type || auth.chatgpt_plan_type || ''), short: win(rl.primary_window), weekly: win(rl.secondary_window),
+      status: rl.limit_reached ? 'rejected' : (rl.allowed === false ? 'rejected' : 'allowed'), updated: Date.now(), source: 'chatgpt usage api' };
+    accountUsage[usageKey('codex', acct)] = u;
+    restIfSpent('codex', acct, u);
+  } catch (_) { /* network / shape change: keep the last reading */ }
+}
+async function refreshAllAccountUsage() {
+  const accts = [];
+  if (codexAAlive()) accts.push('A');
+  if (codexB.connected()) accts.push('B');
+  for (const a of accts) await refreshCodexUsage(a);
+  try { AirtableSync.observe('accounts.usage', { list: accountsUsageSnapshot() }); } catch (_) {}
+}
+function accountsUsageSnapshot() {
+  const out = [];
+  const add = (provider, acct, signedIn) => {
+    const u = accountUsage[usageKey(provider, acct)] || null;
+    const until = accountRouter.coolingUntil(provider, acct) || null;
+    out.push({ provider, account: acct, signedIn: !!signedIn, plan: u ? u.plan : '', short: u ? u.short : null, weekly: u ? u.weekly : null,
+      status: until ? 'resting' : (u && u.status === 'allowed_warning' ? 'near limit' : 'ok'), restingUntil: until, updated: u ? u.updated : null, source: u ? u.source : '' });
+  };
+  add('claude-code', 'A', true);
+  add('claude-code', 'B', claudeAccountsAvailable().indexOf('B') >= 0);
+  add('codex', 'A', codexAAlive());
+  add('codex', 'B', codexB.connected());
+  return out;
+}
+setTimeout(() => { refreshAllAccountUsage().catch(() => {}); }, 20000).unref();
+setInterval(() => { refreshAllAccountUsage().catch(() => {}); }, 5 * 60 * 1000).unref();
+
 const accountRouter = Accounts.makeAccountRouter({
   onSwitch: (ev) => console.log('[accounts] ' + ev.provider + ' agent ' + ev.agentId + ' moved from account ' + ev.from + ' to ' + ev.to + ' (usage limit)')
 });
@@ -16505,6 +16585,7 @@ async function runOnceCore(o) {
   // Dylan's fork: which ChatGPT account (A/B) this run uses — sticky per agent, moves on a usage-limit hit.
   const codexAcct = usingCodex ? accountRouter.pick('codex', agentId, codexAccountsAvailable(), pinnedAccountFor(agentId)) : '';
   if (usingCodex) {
+    try { AirtableSync.observe('agent.account', { agentId, runId, provider: 'codex', account: codexAcct }); } catch (_) {}
     const fns = codexFnsFor(codexAcct);
     let codexToken;
     try { codexToken = await fns.ensure(); }
@@ -17681,8 +17762,10 @@ async function runOnceCore(o) {
       }
       // Dylan's fork: which Claude login (A = default ~/.claude, B = CLAUDE_B_DIR) this run uses.
       const ccAcct = accountRouter.pick('claude-code', agentId, claudeAccountsAvailable(), pinnedAccountFor(agentId));
+      try { AirtableSync.observe('agent.account', { agentId, runId, provider: 'claude-code', account: ccAcct }); } catch (_) {}
       result = await ClaudeCodeEngine.runClaudeCodeEngine({
         configDir: claudeConfigDirFor(ccAcct),
+        onRateLimit: (info) => recordClaudeUsage(ccAcct, info),
         agentId, runId, trigger, model, reasoningEffort, messages: msgs, emit: loopEmit, signal, cwd: ccCwd,
         tools: o.outputOnly ? [] : toolDefs.concat(deferredToolDefs),
         dispatch: (c) => dispatch(c, capCtx),
@@ -20091,6 +20174,7 @@ async function handleAccountsOverview(req, res) {
       routing: accountRouter.status('codex', codexAccountsAvailable())
     },
     switches: accountRouter.recentSwitches(),
+    usage: accountsUsageSnapshot(),
     pins: Object.assign({}, accountPins),
     agents: Array.from(agentRoster.entries()).map(([id, a]) => ({ agentId: id, name: a.name || id, provider: a.provider || '' }))
       .filter(a => a.provider === 'codex' || a.provider === 'claude-code')

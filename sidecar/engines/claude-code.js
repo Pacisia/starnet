@@ -527,7 +527,15 @@ async function runClaudeCodeEngine(o) {
     const mapper = makeStreamMapper({ emit, agentId, runId });
     const proc = await runCli({
       bin, args, cwd: o.cwd || process.cwd(), env: withConfigDir(cleanEnv(o.env || process.env, bin), o.configDir), signal: o.signal,
-      stdin: composePrompt(parts, !!resumeId), onLine: mapper.line, spawn: o.spawn
+      stdin: composePrompt(parts, !!resumeId), spawn: o.spawn,
+      // Dylan's fork: the CLI streams `rate_limit_event` lines carrying the plan's live 5-hour / weekly
+      // utilization. Hand them to the host (account usage tracking) before normal mapping.
+      onLine: (line) => {
+        if (o.onRateLimit && typeof line === 'string' && line.indexOf('rate_limit_event') >= 0) {
+          try { const j = JSON.parse(line); if (j && j.type === 'rate_limit_event' && j.rate_limit_info) o.onRateLimit(j.rate_limit_info); } catch (_) {}
+        }
+        return mapper.line(line);
+      }
     });
     const r = mapper.finish();
     const cancelled = !!(o.signal && o.signal.aborted);
