@@ -11,7 +11,7 @@ assert.equal(Themes.read({getItem(){throw new Error('storage blocked');}}),'orig
 assert.equal(Themes.set('does-not-exist'),false);
 let notices=0;const unsubscribe=Themes.subscribe(()=>notices++);
 for(const t of Themes.catalog)assert.equal(Themes.set(t.id,{persist:false}),true);
-assert.equal(notices,4);unsubscribe();Themes.set('original',{persist:false});assert.equal(notices,4);
+assert.equal(notices,Themes.catalog.length);unsubscribe();Themes.set('original',{persist:false});assert.equal(notices,Themes.catalog.length);
 
 // Theme changes have exactly one persistence target, never StarNet's save or roster keys.
 const writes=[];global.localStorage={setItem:(key,value)=>writes.push({key,value})};
@@ -53,7 +53,7 @@ assert.equal(Art.roleFor({role:'specialist',name:'Unknown'}).kind,'scout');
 const record=Object.freeze({id:'crew-a',specialtyId:'researcher'});
 Art.bind({agentRecord:()=>record});
 function context() {
-  const calls=[];const ctx=new Proxy({calls,globalAlpha:1},{get(t,k){return k in t?t[k]:(...args)=>calls.push([k,...args]);},set(t,k,v){t[k]=v;return true;}});
+  const calls=[];const ctx=new Proxy({calls,globalAlpha:1,measureText:t=>({width:String(t).length*7})},{get(t,k){return k in t?t[k]:(...args)=>calls.push([k,...args]);},set(t,k,v){t[k]=v;return true;}});
   return ctx;
 }
 const body=Object.freeze({id:'crew-a',px:30,py:50,dir:'south',state:'walk',target:true,odo:7,working:false});
@@ -110,4 +110,52 @@ Themes.set('holographic',{persist:false});
 assert.equal(Art.hasWorldRenderer(),true);assert.equal(Art.drawWorld(null,null,frame),frame,'complete views consume the read-only presentation frame');
 assert.deepEqual(Art.clientToWorld({}),{x:12,y:24});assert.deepEqual(Art.worldToCanvas(1,2),{x:30,y:40});
 Themes.set('original',{persist:false});assert.equal(Art.hasWorldRenderer(),false);assert.equal(Art.drawWorld(null,null,frame),null);assert.equal(Art.clientToWorld({}),null);
+// The approved-art views use existing station geometry and read-only entities, including
+// rooms added after the concepts were made. Their assets/preferences confer no capability.
+const Sources=require('../frontend/app/station-art.js');
+assert.equal(Object.keys(Sources.models).length,5);
+assert.equal(Sources.has('osrs'),false,'the retained OSRS renderer owns its own art');
+assert.equal(Sources.load('missing'),null);
+for(const [id,model]of Object.entries(Sources.models)){
+  assert.ok(Themes.valid(id));assert.ok(Object.isFrozen(model)&&Object.isFrozen(model.npc.player));
+  const file=fs.readFileSync(require('node:path').join(__dirname,'../frontend',model.source));
+  assert.equal(file.subarray(1,4).toString(),'PNG');assert.equal(file.readUInt32BE(16),3072);assert.equal(file.readUInt32BE(20),2048);
+  assert.ok(model.historyId&&Themes.catalog.find(t=>t.id===id).preview===model.source);
+}
+const fakeCanvas=()=>({width:0,height:0,getContext:()=>{const g=context();g.measureText=t=>({width:String(t).length*7});return g;}});
+const pictures={};for(const k of ['player','mage','scholar','ranger','guard','cook','banker','elf','dwarf','scout'])pictures[k]={width:60,height:120};
+const props={};for(const k of ['computer','workbench','cabinet','dish','notebook','studio','table','plant','portal'])props[k]={width:100,height:100};
+const fixtureArt={ready:true,npc:pictures,props,materials:{floor:{width:56,height:56},wall:{width:80,height:24},cap:{width:80,height:8},window:{width:180,height:60}}};
+const modernScope={module:{exports:{}},StationPresentation:Art,PresentationThemes:Themes,OSRSWorld:Perspective,
+  StationArt:{models:Sources.models,has:Sources.has,ready:()=>true,load:id=>({...fixtureArt,model:Sources.models[id]})},document:{createElement:fakeCanvas}};
+vm.runInNewContext(fs.readFileSync(require.resolve('../frontend/app/openart-world.js'),'utf8'),modernScope);
+const Modern=modernScope.module.exports;
+const room=Object.freeze({width:240,height:180,tileSize:12,floor:Object.freeze(Array.from({length:12},(_,i)=>Object.freeze({x:24,y:12+i*12,w:192,h:12}))),belts:Object.freeze([])});
+const actors=Object.freeze([
+  Object.freeze({id:'r',name:'Research',x:78,y:60,dir:'south',odo:8,moving:true,working:false}),
+  Object.freeze({id:'e',name:'Build',x:168,y:96,dir:'west',odo:0,moving:false,working:true,sitting:true}),
+  Object.freeze({id:'s',name:'Guard',x:66,y:126,dir:'east',odo:0,moving:false,working:false,lying:true,waiting:true})
+]);
+const gear=Object.freeze([
+  Object.freeze({id:'research',type:'desk',capability:'computer',x:72,y:24,w:24,h:12,users:Object.freeze(['r'])}),
+  Object.freeze({id:'future',type:'future-module',capability:'future-capability',x:180,y:126,w:12,h:12,users:Object.freeze([])})
+]);
+const projected=Object.freeze({layout:room,bodies:actors,equipment:gear,connected:true,viewport:Object.freeze({x:0,y:0,w:240,h:180}),transports:Object.freeze([])}),projectionBefore=JSON.stringify(projected);
+Modern.bind(id=>({id,specialtyId:id==='r'?'researcher':id==='e'?'engineer':'security',model:'unchanged',skin:'unchanged'}));
+const screen={width:962,height:639,getBoundingClientRect:()=>({left:10,top:20,width:481,height:319.5})};
+for(const id of Object.keys(Sources.models)){
+  Themes.set(id,{persist:false});Art.reset();
+  assert.equal(Art.hasWorldRenderer(),true);assert.equal(Art.drawWorld(context(),screen,{snapshot:projected,now:1000,reducedMotion:true}),true);
+  const hits=Modern.hitRects();assert.equal(hits.filter(h=>h.kind==='agent'&&h.theme).length,3);assert.equal(hits.filter(h=>h.kind==='equipment').length,2);
+  const hit=hits.filter(h=>h.kind==='agent').at(-1),event={clientX:10+(hit.x+hit.w/2)/2,clientY:20+(hit.y+hit.h/2)/2};
+  assert.equal(Modern.clientHit(event,screen).id,hit.id);assert.deepEqual({...Art.clientToWorld(event,screen)},{x:hit.wx,y:hit.wy});
+  assert.ok(Modern.drawPortrait(fakeCanvas(),{id:'r',specialtyId:'researcher'}));
+  assert.equal(JSON.stringify(projected),projectionBefore,'rendering, picking, seating and lying do not mutate station state');
+}
+Themes.set('space-colony',{persist:false});
+const paint=(now,odo,still)=>{Art.reset();const g=context(),b=Object.freeze({...actors[0],odo});Modern.draw(g,screen,{snapshot:{...projected,bodies:[b]},now,reducedMotion:still});return g.calls.map(c=>c[0]==='drawImage'&&c[1]?.getContext?[c[0],'cached terrain',...c.slice(2)]:c);};
+assert.deepEqual(paint(100,8,true),paint(9000,90,true),'reduced motion disables the movement bands and work pulse');
+assert.notDeepEqual(paint(100,8,false),paint(100,90,false),'walking animation follows the authoritative movement odometer');
+Themes.set('osrs',{persist:false});assert.equal(Modern.active(),false);assert.equal(Modern.draw(context(),screen,{snapshot:projected}),false);assert.equal(Modern.clientToWorld({},screen),null);
+Themes.set('original',{persist:false});assert.equal(Art.hasWorldRenderer(),false);
 console.log('presentation-themes: isolated theme/cosmetic preferences, armour facing, unchanged roles/models/skins, inverse picking, atlas bounds, native fallback and reduced motion passed');

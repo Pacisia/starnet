@@ -42,12 +42,19 @@ try {
   await evaluate(`App.summonAgent({id:'researcher',name:'THEME CHECK',purpose:'Research specialist',manual:'Browser fixture',model:'balanced',skills:[]},{desk:true})`);
   await sleep(1000);
   await evaluate(`window.__themeCheckIdentity=()=>JSON.stringify({station:World.stationDoc(),agents:App.agents()})`);
-  for (const id of ['osrs', 'cyberpunk', 'holographic', 'original']) {
+  for (const id of await evaluate(`PresentationThemes.catalog.map(t=>t.id)`)) {
     const switched = await choose(id);
     assert.equal(switched.id, id);
     assert.ok(switched.unchanged, 'theme change preserves canonical station and roster');
     await sleep(350);
     assert.ok(await evaluate(`document.body.dataset.stationTheme===${JSON.stringify(id)}`), 'picker applies ' + id);
+    if(await evaluate(`StationArt.has(${JSON.stringify(id)})`)){
+      await waitFor(`OpenArtWorld.ready()&&OpenArtWorld.hitRects().some(r=>r.kind==='agent')`, 'approved artwork and live entities ready: '+id);
+      assert.ok(await evaluate(`document.body.dataset.stationArt==='openart'&&document.body.style.getPropertyValue('--station-art-brand').includes('data:image/png')`),'reference client surfaces loaded');
+      assert.ok(await evaluate(`(() => {const s=World.presentationSnapshot();return OpenArtWorld.hitRects().filter(r=>r.kind==='agent'&&r.theme).length===s.bodies.filter(b=>!b.unplaced).length;})()`),'each visible agent comes from the live snapshot');
+      const point=await evaluate(`(() => {const hit=OpenArtWorld.hitRects().filter(r=>r.kind==='agent').at(-1),c=document.getElementById('stage'),r=c.getBoundingClientRect();return {x:r.left+(hit.x+hit.w/2)*r.width/c.width,y:r.top+(hit.y+hit.h/2)*r.height/c.height};})()`);
+      await clickPoint(point);await waitFor(`!!document.querySelector('.term.dossier')`,'approved-art NPC opens existing dossier');await evaluate(`StationUI.closeTerm('agents');StationThemeUI.nav('station')`);
+    }
   }
   await choose('osrs');
   await waitFor(`typeof OSRSWorld!=='undefined'&&OSRSWorld.ready()&&OSRSWorld.hitRects().some(r=>r.kind==='agent')`, 'perspective assets and real entities ready');
@@ -115,7 +122,7 @@ try {
   assert.ok(await evaluate(`!document.getElementById('osrs-appearance').open`),'returning to Original closes the theme-specific picker');
   assert.ok(await evaluate(`getComputedStyle(document.getElementById('station-game-overview')).display==='none'&&!document.getElementById('chat-panel').classList.contains('station-activity-selected')`), 'original restores native UI');
   assert.deepEqual(errors, [], 'no browser exceptions');
-  console.log('station-themes browser: four renderers, unchanged canonical state, NPC/equipment picking, live rune/dragon armour on a working agent, per-agent persistence/reset, activity, Settings and phone layout passed; no provider calls');
+  console.log('station-themes browser: eight styles, five approved-art renderers, unchanged canonical state, NPC/equipment picking, live rune/dragon armour, persistence, activity, Settings and phone layout passed; no provider calls');
 } finally {
   if (cdp) { try { await cdp.send('Browser.close'); } catch {} }
   for (const p of [chrome, server]) { if (p && p.exitCode == null) p.kill('SIGKILL'); }

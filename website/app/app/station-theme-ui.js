@@ -20,7 +20,7 @@ const StationThemeUI = (() => {
   function nav(action) {
     el('left')?.classList.toggle('osrs-projects-open',action==='projects');
     document.querySelectorAll('.station-game-nav [data-station-nav]').forEach(b=>b.setAttribute('aria-current',b.dataset.stationNav===action?'page':'false'));
-    if(action==='station'){ if(typeof OSRSWorld!=='undefined')OSRSWorld.reset();if(typeof World!=='undefined'&&World.presentationOverview)World.presentationOverview();return; }
+    if(action==='station'){ if(typeof OSRSWorld!=='undefined')OSRSWorld.reset();if(typeof OpenArtWorld!=='undefined'&&OpenArtWorld.active())OpenArtWorld.reset();if(typeof World!=='undefined'&&World.presentationOverview)World.presentationOverview();return; }
     if(action==='missions'){el('bb-missions')?.click();return;}
     if(action==='projects'){document.querySelector('[data-ws-tab="projects"]')?.click();el('ws-tab-projects')?.click();return;}
     if(action==='analytics'){StationUI.openTerm('agents','record');return;}
@@ -69,6 +69,8 @@ const StationThemeUI = (() => {
     document.addEventListener('click',e=>{const b=e.target.closest('[data-station-theme]');if(b)PresentationThemes.set(b.dataset.stationTheme);});
     StationPresentation.bind({agentRecord:id=>roster.find(a=>a.id===id)||null});
     if(typeof OSRSWorld!=='undefined')OSRSWorld.bind(id=>roster.find(a=>a.id===id)||null);
+    if(typeof OpenArtWorld!=='undefined')OpenArtWorld.bind(id=>roster.find(a=>a.id===id)||null);
+    if(typeof StationArt!=='undefined')StationArt.subscribe(()=>{lastSignature='';tick();});
     PresentationThemes.subscribe(changed);changed(PresentationThemes.get());
     OSRSAppearance.subscribe(()=>{lastSignature='';tick();});
     wireEvents();setInterval(tick,250);tick();
@@ -78,6 +80,7 @@ const StationThemeUI = (() => {
     document.querySelectorAll('[data-station-theme]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.stationTheme===id)));
     StationPresentation.reset();if(typeof OSRSWorld!=='undefined')OSRSWorld.reset();setFeed(id==='osrs'?'activity':id==='original'?'conversation':feedMode);
     lastSignature='';renderEvents();
+    if(typeof StationArt!=='undefined'&&StationArt.has(id))StationArt.applyUI(id);
     // Let the existing resize observer rebuild its canvas and camera using the new layout.
     window.dispatchEvent(new Event('resize'));tick();
     if(typeof World!=='undefined'&&World.presentationOverview)World.presentationOverview();
@@ -134,10 +137,11 @@ const StationThemeUI = (() => {
     const signature=bodies.map(b=>[b.id,b.name,b.working,b.waiting,b.moving,b.tool,b.role]).join('|')+roster.map(a=>[a.id,a.name,a.specialtyId,a.model]).join('|')+OSRSAppearance.revision();
     if(signature!==lastSignature){lastSignature=signature;el('station-map-crew').innerHTML=bodies.map(b=>{
       const a=roster.find(a=>a.id===b.id)||b, role=StationPresentation.roleFor(a), label=b.waiting?'Awaiting approval':b.tool?'Using '+b.tool:b.working?'Working…':b.moving?'Walking…':'Idle';
-      const osrs=PresentationThemes.get()==='osrs',look=OSRSAppearance.resolve(a);
-      return '<div class="station-crew-row"><button type="button" data-map-agent="'+esc(b.id)+'" class="station-crew-entry" title="'+esc(b.name+' · '+role.job+' · '+label)+'">'+(osrs?'<canvas class="station-npc-mark" width="40" height="52" data-npc-portrait="'+esc(b.id)+'" aria-hidden="true"></canvas>':'<span class="station-npc-mark" style="--npc-color:'+role.color+'" aria-hidden="true">♟</span>')+'<span><b>'+esc(osrs?look.npcName:b.name)+'</b><small>'+esc(osrs?label:role.name+' · '+label)+'</small></span><i class="'+(b.waiting?'waiting':b.working?'working':'idle')+'" aria-hidden="true"></i></button><button type="button" class="osrs-crew-look" data-osrs-looks="'+esc(b.id)+'" aria-label="Change '+esc(b.name)+' appearance" title="Change appearance">⚒</button></div>';
+      const osrs=PresentationThemes.get()==='osrs',illustrated=typeof OpenArtWorld!=='undefined'&&OpenArtWorld.active(),look=OSRSAppearance.resolve(a);
+      return '<div class="station-crew-row"><button type="button" data-map-agent="'+esc(b.id)+'" class="station-crew-entry" title="'+esc(b.name+' · '+role.job+' · '+label)+'">'+(osrs||illustrated?'<canvas class="station-npc-mark" width="40" height="52" data-npc-portrait="'+esc(b.id)+'" aria-hidden="true"></canvas>':'<span class="station-npc-mark" style="--npc-color:'+role.color+'" aria-hidden="true">♟</span>')+'<span><b>'+esc(osrs?look.npcName:b.name)+'</b><small>'+esc(osrs?label:(illustrated?role.job:role.name)+' · '+label)+'</small></span><i class="'+(b.waiting?'waiting':b.working?'working':'idle')+'" aria-hidden="true"></i></button><button type="button" class="osrs-crew-look" data-osrs-looks="'+esc(b.id)+'" aria-label="Change '+esc(b.name)+' appearance" title="Change appearance">⚒</button></div>';
     }).join('')||'<p class="station-feed-empty">Your crew appears here after onboarding.</p>';}
     if(PresentationThemes.get()==='osrs')document.querySelectorAll('[data-npc-portrait]').forEach(c=>OSRSWorld.drawPortrait(c,roster.find(a=>a.id===c.dataset.npcPortrait)||{id:c.dataset.npcPortrait}));
+    else if(typeof OpenArtWorld!=='undefined'&&OpenArtWorld.active())document.querySelectorAll('[data-npc-portrait]').forEach(c=>OpenArtWorld.drawPortrait(c,roster.find(a=>a.id===c.dataset.npcPortrait)||{id:c.dataset.npcPortrait}));
     const work=typeof Workstreams!=='undefined'&&Workstreams.all?Workstreams.all().filter(w=>w.busy):[];
     const ws=JSON.stringify(work.map(w=>[w.id,w.title,w.agentId]));
     if(el('station-current-work').dataset.signature!==ws){el('station-current-work').dataset.signature=ws;el('station-current-work').innerHTML=work.length?work.slice(0,5).map(w=>'<button type="button" data-map-work="'+esc(w.id)+'"><b>'+esc(w.title||'Agent session')+'</b><small>'+esc(agentName(w.agentId))+' · in progress</small></button>').join(''):'<p class="station-feed-empty">No active sessions.<br>Start a mission or talk to your crew.</p>';}
@@ -148,19 +152,19 @@ const StationThemeUI = (() => {
     const ox=(W-l.width*k)/2,oy=(H-l.height*k)/2;mapTransform={k,ox,oy};
     g.clearRect(0,0,W,H);g.save();g.beginPath();g.arc(W/2,H/2,W/2-9,0,Math.PI*2);g.clip();
     g.fillStyle='#060b0d';g.fillRect(0,0,W,H);g.translate(ox,oy);g.scale(k,k);
-    g.fillStyle=PresentationThemes.get()==='osrs'?'#5a5847':'#19364b';
-    const osrs=PresentationThemes.get()==='osrs';
-    g.strokeStyle=osrs?'#97907a33':'#427991';g.lineWidth=1/k;
+    const osrs=PresentationThemes.get()==='osrs',illustrated=typeof OpenArtWorld!=='undefined'&&OpenArtWorld.active(),palette=illustrated?StationArt.models[PresentationThemes.get()].palette:null;
+    g.fillStyle=osrs?'#5a5847':palette?palette[4]:'#19364b';
+    g.strokeStyle=osrs?'#97907a33':palette?palette[2]+'33':'#427991';g.lineWidth=1/k;
     for(const r of l.floor){g.fillRect(r.x,r.y,r.w,r.h);g.strokeRect(r.x,r.y,r.w,r.h);}
-    if(osrs){
+    if(osrs||illustrated){
       if(mapLayout!==l){mapLayout=l;mapOutline=OSRSWorld.outline(l);}
-      for(const points of mapOutline.loops){g.beginPath();points.forEach((p,i)=>i?g.lineTo(p.x,p.y):g.moveTo(p.x,p.y));g.closePath();g.strokeStyle='#34332e';g.lineWidth=9;g.stroke();g.strokeStyle='#8c8a81';g.lineWidth=5;g.stroke();}
+      for(const points of mapOutline.loops){g.beginPath();points.forEach((p,i)=>i?g.lineTo(p.x,p.y):g.moveTo(p.x,p.y));g.closePath();g.strokeStyle=palette?palette[1]:'#34332e';g.lineWidth=9;g.stroke();g.strokeStyle=palette?palette[2]:'#8c8a81';g.lineWidth=5;g.stroke();}
     }
-    for(const p of s.equipment){if(osrs&&OSRSWorld.drawMapEquipment(g,p))continue;g.fillStyle=p.users.length?'#c9ae55':'#818e84';g.fillRect(p.x,p.y,p.w,p.h);}
+    for(const p of s.equipment){if(osrs&&OSRSWorld.drawMapEquipment(g,p))continue;if(illustrated&&OpenArtWorld.drawMapEquipment(g,p))continue;g.fillStyle=p.users.length?'#c9ae55':'#818e84';g.fillRect(p.x,p.y,p.w,p.h);}
     for(const b of s.bodies){if(b.unplaced)continue;g.beginPath();g.arc(b.x,b.y,(b.working?3.3:2.5)/k,0,Math.PI*2);g.fillStyle=b.waiting?'#e76954':b.working?'#ffdc64':osrs?'#e9d26b':'#c9dbb3';g.fill();g.strokeStyle='#282c22';g.stroke();}
     const v=s.viewport,bounds=typeof OSRSWorld!=='undefined'?OSRSWorld.bounds(l):null;
     if(v&&(!bounds||v.x>bounds.x||v.y>bounds.y||v.x+v.w<bounds.x+bounds.w||v.y+v.h<bounds.y+bounds.h)){g.strokeStyle='#d5ca99';g.lineWidth=1/k;g.strokeRect(v.x,v.y,v.w,v.h);}
-    g.restore();g.strokeStyle=PresentationThemes.get()==='osrs'?'#887855':'#4aa7c6';g.lineWidth=5;g.beginPath();g.arc(W/2,H/2,W/2-7,0,Math.PI*2);g.stroke();
+    g.restore();g.strokeStyle=osrs?'#887855':palette?palette[2]:'#4aa7c6';g.lineWidth=5;g.beginPath();g.arc(W/2,H/2,W/2-7,0,Math.PI*2);g.stroke();
   }
   function mapClick(e) {
     if(!snapshot||!mapTransform)return;const c=el('station-minimap'),r=c.getBoundingClientRect();

@@ -14,8 +14,16 @@ The **UI STYLE** picker is in the station's top bar. The same choices are availa
 - **OSRS Guild**: the supplied reference's gold header, stone and wood client framing,
   perspective stone station, detailed fantasy NPCs, timber/CRT capability equipment,
   circular live minimap with real station counts and parchment chat/activity area.
-- **Neon Cyberpunk**: violet floors, neon signals and armored crew.
+- **Space Colony**: rugged habitat equipment, astronaut crew, off-white hull panels and a planet window.
+- **Cyberpunk Workshop**: detailed neon-city workshop, specialist crew and industrial consoles.
+- **Starship Bridge**: command uniforms, polished consoles, tactical table and orbital observation window.
+- **Steampunk Airship**: brass machinery, timber deck, Victorian crew and circular portholes.
+- **Secret-Agent HQ**: covert operatives, green intelligence consoles, archives and a mission map.
 - **Holographic Command**: a blue wireframe deck with translucent projected crew.
+
+The five new styles use the approved OpenArt concepts as their actual asset sources, including
+crew, equipment, framing, icons and room materials. Their settings cards display those concepts.
+The OSRS renderer, appearance dialog and all OSRS assets are unchanged from `d99ff0e`.
 
 Selection applies immediately, including during a running task. It persists per browser/app
 origin in `starnet.presentation.v1`. It is deliberately independent of the saved phosphor
@@ -57,6 +65,11 @@ The additions are confined to presentation:
    Complete views register through `StationPresentation.registerView(themeId, renderer)` with
    `draw`, `clientToWorld`, `worldToCanvas` and `reset` methods. Future perspective/3D renderers
    use the same hooks; core world code contains no OSRS-specific view selection.
+6. `station-art.js`, `openart-world.js` and `openart-client.css`: five concept-backed complete
+   views using that existing renderer API. Each loads its own preserved 3072 × 2048 source PNG
+   on demand, extracts and caches presentation assets, and draws the actual station layout,
+   equipment and agent state. The geometry helpers are shared with the existing perspective
+   view. Neither the artwork nor its printed example values become application state.
 
 Only small hooks are added at the existing world/base, prop and body draw boundaries. Native
 pathfinding, entity selection, conveyors, ownership, task progress, permissions and save logic remain
@@ -73,13 +86,16 @@ Research → mage; analytics → elder scholar; content → ranger; security →
 data → crafter/cook; finance → banker; integrations → elf; engineering → dwarf;
 web → traveller; orchestrator → operator. Explicit specialties take priority over names
 or purpose text. The OSRS revision uses generated sprite atlases with four facing directions,
-including distinct traveller and operator art; other experimental themes retain their procedural
-art. The supplied image provides decorative client framing and icons. The station scene,
+including distinct traveller and operator art. The five OpenArt styles use role-specific source
+crew cutouts and matching sidebar portraits; Holographic Command retains its procedural art.
+The supplied images provide decorative client framing and icons. The station scene,
 NPC locations, equipment, minimap, counts and activity are rendered from live state.
 The current revision also samples empty stone surfaces and banners from the supplied reference,
 projects them onto canonical floor/wall geometry and caches terrain and sprite colour grading.
 The source image's fixed values, agents and progress messages are never used as live telemetry.
 See `OSRS_ASSETS.md` for asset provenance and the bundled font license.
+See `OPENART_STYLES.md` and `OPENART_SOURCES.json` for the five concepts, extraction method,
+animation limits and exact source provenance.
 
 Walking uses the existing body's position, facing and odometer. Idle, working, seated and sleeping
 poses use the simulation's state; seated sprites compress their lower pose, resting sprites lie
@@ -133,21 +149,31 @@ workflow when copying real station data into the experimental instance.
 
 UI-only rollback is simply **UI STYLE → Original StarNet**. Code rollback is returning the
 experimental checkout to the baseline branch/commit. No station migration is needed.
+`rollback/pre-openart-styles-d99ff0e` preserves the approved OSRS/armour revision before these
+five new styles. The bundle includes that commit, so the same rollback branch can be recreated.
 
 ## Verification
 
 The previous complete browser pass was at commit `c83f238`; it validated the four original
-presentations before this armour/material revision. Current validation:
+presentations before the armour/material and OpenArt revisions. Current validation:
 
 - 16 focused headless suites passed for cosmetic/theme isolation, world model, native body clicks,
   character rendering, settings, station authority, containment, seating, approval and movement.
 - Direct execution of the actual `OSRSWorld` renderer against immutable seeded state validated
   the loaded atlases, rune/dragon body draws, and all 684 agent × appearance × facing sprite
   combinations. Renderer previews are explicitly identified; they are not live app screenshots.
-- The expanded `scripts/verify-station-themes.mjs` checks rune and dragon on a working agent,
-  unchanged canonical data, per-agent reload/reset and a phone-size appearance picker. It could
-  not run this turn: Chrome requires local IPC sockets that this execution policy blocks, and
-  escalated execution was rejected. Do not treat the new browser checks as passed.
+- Direct execution of all five shipped `OpenArtWorld` views loaded the preserved source images,
+  rendered nine real fixture agents and 19 placed props, produced picking bounds, and left all
+  immutable station inputs unchanged. The current previews capture this renderer execution.
+- Theme tests also cover all eight catalog entries, the source PNG dimensions, immutable asset
+  definitions, complete-view switching, real equipment identities, inverse coordinates, native
+  fallback and reduced-motion/odometer behavior. The source and assets for OSRS are byte-identical
+  to the pre-OpenArt rollback commit.
+- The expanded `scripts/verify-station-themes.mjs` checks all eight styles, real new-theme agent
+  picking, source-backed framing, rune/dragon on a working agent, unchanged canonical data,
+  per-agent reload/reset and a phone-size appearance picker. Current browser checks remain
+  unverified: the available Chrome attempt was blocked by local IPC policy, escalation was
+  rejected, and a later configured Chrome path had no executable. Do not treat these checks as passed.
 - Website mirror synchronization and `git diff --check` passed.
 
 Earlier browser validation (before this revision):
@@ -177,7 +203,7 @@ restamped by this experiment. The preceding 292 steps passed. These checks do no
 repository's release claims.
 
 Browser validation should use the seeded sidecar with its own workspace and port. Check all
-four themes, Settings, the minimap, agent dossiers, real event projection, expanded
+eight themes, Settings, the minimap, agent dossiers, real event projection, expanded
 conversation, return to Original, persistence after reload and a narrow viewport. The
 seed has placeholder credentials: it exercises the real local app without making paid model
 calls. It does not certify an actual provider run or desktop packaging on iPhone/Windows/macOS.
