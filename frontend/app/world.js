@@ -1814,6 +1814,7 @@ const World = (() => {
   // Output pixel -> pre-CRT scene pixel. Match the renderer's six-step inverse,
   // including overscan, BEFORE undoing the camera. Drag deltas remain screen-space.
   function uncurvePoint(c) {
+    if (typeof StationPresentation !== 'undefined' && StationPresentation.active()) return c;
     if (CRT.curve <= 0 || document.body.classList.contains('no-scan')) return c;
     const hw = cv.width / 2, hh = cv.height / 2, over = overAmt(), k = Math.max(0, +CRT.curve || 0);
     const nx = (c.x - hw) / hw / over, ny = (c.y - hh) / hh / over;
@@ -1830,6 +1831,11 @@ const World = (() => {
     return Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x < cv.width && y >= 0 && y < cv.height ? { x, y } : null;
   }
   function curvePoint(c) {
+    if (typeof StationPresentation !== 'undefined') {
+      const projected = StationPresentation.worldToCanvas?.((c.x-panX)/scale,(c.y-panY)/scale);
+      if (projected) return projected;
+    }
+    if (typeof StationPresentation !== 'undefined' && StationPresentation.active()) return c;
     if (CRT.curve <= 0 || document.body.classList.contains('no-scan')) return c;
     const hw = cv.width / 2, hh = cv.height / 2;
     const nx = (c.x - hw) / hw, ny = (c.y - hh) / hh;
@@ -1837,6 +1843,9 @@ const World = (() => {
     return { x: hw + nx * f * hw, y: hh + ny * f * hh };
   }
   function toWorld(ev) {
+    if (typeof StationPresentation !== 'undefined') {
+      const projected = StationPresentation.clientToWorld?.(ev,cv);if(projected)return projected;
+    }
     const c = uncurvePoint(toCanvas(ev));
     return c ? { x: (c.x - panX) / scale, y: (c.y - panY) / scale } : null;
   }
@@ -6194,6 +6203,10 @@ const World = (() => {
       && IndustrialTextures.drawBase(ctx, d.image, d.x, d.y))) ctx.drawImage(d.image, d.x, d.y);
   }
   function drawLitProp(p, work, live) {
+    if (typeof StationPresentation !== 'undefined' && StationPresentation.active() && StationPresentation.drawProp(ctx, Object.freeze(Object.assign({}, p)), {
+      capability: station && station.capForProp ? station.capForProp(p.t) : null,
+      tileSize: T, now: fnow, working: !!work, reducedMotion: reduceMotion(), live
+    })) return;
     PropSprites.draw(p, work, live);
     if (!sceneRenderer || !PropSprites.canLightResponse || !PropSprites.canLightResponse(p)) return;
     // Sample the physical footprint, not elevated sprite pixels inside the
@@ -6604,6 +6617,10 @@ const World = (() => {
     drawCurve(now); // barrel-warp the whole feed IN-CANVAS — the original (dot-matrix-era) curve, no dots
     reviewMark('postProcess');
     drawCRT(now);   // scanlines + fade, painted in-canvas at device-px OVER the warped feed (no moiré)
+    // Presentation-only replacement, AFTER all native conveyor ticks, deliveries, prop updates and
+    // simulation work. Never early-return around that functional work when an alternate view is selected.
+    if (typeof StationPresentation !== 'undefined' && StationPresentation.hasWorldRenderer?.())
+      StationPresentation.drawWorld(ctx,cv,{snapshot:presentationSnapshot(),now,reducedMotion:reduceMotion()});
     paintStageHeartbeat();   // the frame's last act: the one opaque pixel a dead stage context cannot fake (see watchStageLoss)
     reviewMark('static');
     updateCameraHud(now);
@@ -6640,6 +6657,7 @@ const World = (() => {
   // and only suppressor here, and it is internal: scripts/verify-stars2.mjs sets it to flatten the
   // feed for star-pixel checks. Do not wire a settings class into this pass.
   function drawCRT(now) {
+    if (typeof StationPresentation !== 'undefined' && StationPresentation.active()) return;
     if (!cv || document.body.classList.contains('no-scan')) return;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     const dpr = window.devicePixelRatio || 1;
@@ -6785,6 +6803,7 @@ const World = (() => {
     _lut = lut; _lutKey = key;
   }
   function drawCurve(now) {
+    if (typeof StationPresentation !== 'undefined' && StationPresentation.active()) return;
     if (!cv || (CRT.curve <= 0 && !sharpAmt()) || document.body.classList.contains('no-scan')) return;
     const k = Math.max(0, +CRT.curve || 0), W = cv.width, H = cv.height;
     if (!_glFailed && drawCurveGL(k, W, H)) return;   // GPU path (near-free); on any failure it flips _glFailed
@@ -7055,6 +7074,7 @@ const World = (() => {
      first downscale. Never reads pixels back (the frame-loop getImageData law). */
   let _blA = null, _blB = null, _blCtxA = null, _blCtxB = null, _blFrame = 0, _blFresh = false;
   function drawBloom(now) {
+    if (typeof StationPresentation !== 'undefined' && StationPresentation.active()) return;
     const k = +CRT.bloom;
     if (!cv || !(k > 0.001) || document.body.classList.contains('no-scan')) return;
     const W = cv.width, H = cv.height;
@@ -7293,7 +7313,12 @@ const World = (() => {
       if (bornA < 1) ctx.globalAlpha = prevA * bornA;
       let geom = null;
       const bodyLight = sceneRenderer && sceneRenderer.sampleLight(who.px, who.py);
-      if (typeof SPRITES !== 'undefined' && SPRITES.ready) geom = SPRITES.drawBody(ctx, who, now,
+      if (typeof StationPresentation !== 'undefined' && StationPresentation.active()) geom = StationPresentation.drawBody(ctx, Object.freeze({
+        id: who.id, agentId: who.agentId, name: who.name, px: who.px, py: who.py, dir: who.dir,
+        state: who.state, target: !!who.target, working: !!who.working, sitting: !!who.sitting,
+        seated: !!who.seated, lying: !!who.lying, odo: who.odo || 0
+      }), now, { reducedMotion: reduceMotion() });
+      if (!geom && typeof SPRITES !== 'undefined' && SPRITES.ready) geom = SPRITES.drawBody(ctx, who, now,
         bodyLight ? { reducedMotion: reduceMotion(), light: bodyLight,
           skipGroundShadow: !who.seated && !who.lying } : undefined);
       // Do not flash the cyan procedural body while the real default skin is actively loading.
@@ -10068,7 +10093,53 @@ const World = (() => {
     pollFeed: () => pollFeedState(),
     pollShip: () => pollShipStats()
   });
-  return { init, rebake, frameReviewRoom, crt: CRT, slagLog: () => (slaglog ? slaglog.recent() : []),
+  // Presentation API: bounded, immutable copies of geometry and live visual state. No model/prompt/
+  // credential or writable simulation record escapes. Floor spans rebuild only when geometry changes.
+  let presentationGeo = null, presentationLayout = null;
+  function presentationSnapshot() {
+    if (!geo) return null;
+    if (presentationGeo !== geo) {
+      const floor = [];
+      for (let y = 0; y < geo.ROWS; y++) for (let x = 0; x < geo.COLS;) {
+        if (geo.zoneGrid[y * geo.COLS + x] == null) { x++; continue; }
+        const from = x; while (x < geo.COLS && geo.zoneGrid[y * geo.COLS + x] != null) x++;
+        floor.push(Object.freeze({ x: from * T, y: y * T, w: (x - from) * T, h: T }));
+      }
+      presentationGeo = geo;
+      const belts=Object.freeze((geo.belts||[]).map(p=>Object.freeze({x:p.x*T,y:p.y*T,dir:p.dir||p.d||null})));
+      presentationLayout = Object.freeze({ width: geo.W, height: geo.H, tileSize: T, floor: Object.freeze(floor),belts });
+    }
+    const list = [agent, ...crew].filter(Boolean);
+    const bodies = list.map(b => Object.freeze({
+      id: b.agentId || b.id, name: b.name || b.id, x: bodyPosX(b), y: bodyPosY(b),
+      dir:b.dir,state:b.state,odo:b.odo||0,sitting:!!b.sitting,seated:!!b.seated,lying:!!b.lying,
+      moving: !!b.target, working: !!b.working || agentRunsLive(b.agentId || b.id),
+      waiting: b === agent ? !!awaitPrompt : crewIsAwaiting(b), unplaced: !!b.unplaced,
+      tool: (glyphByAgent.get(b.agentId || b.id) || {}).name || null, usingProp: b.usingProp || null
+    }));
+    const equipment = (geo.props || []).map(p => {
+      const capability = station && station.capForProp ? station.capForProp(p.t) : null;
+      const users = list.filter(b => {
+        if (b.usingProp === p.id) return true;
+        const id = b.agentId || b.id, tool = (glyphByAgent.get(id) || {}).name;
+        const cap = tool && typeof ToolProps !== 'undefined' ? ToolProps.toolPropType(tool) : null;
+        return !!cap && capPropFor(cap, id) === p;
+      }).map(b => b.agentId || b.id);
+      return Object.freeze({ id: p.id, type: p.t, capability, agentId:p.agentId||null, rotation:p.r||0, x: p.x * T, y: p.y * T,
+        w: (p.w || 1) * T, h: (p.h || 1) * T, users: Object.freeze(users) });
+    });
+    const view = typeof WorldRenderer !== 'undefined' ? WorldRenderer.visibleRect({ scale, panX, panY, width: cv.width, height: cv.height }) : null;
+    const transports=Object.freeze((convey&&convey.peekBoxes?convey.peekBoxes():[]).map(p=>Object.freeze({x:(p.x+.5)*T,y:(p.y+.5)*T})));
+    return Object.freeze({ layout: presentationLayout, bodies: Object.freeze(bodies), equipment: Object.freeze(equipment),
+      viewport: view && Object.freeze(view), transports, connected: !linkDown(fnow), paused: bridgePaused });
+  }
+  function presentationFocus(x, y) {
+    if (!geo || !Number.isFinite(x) || !Number.isFinite(y) || camAnim || awakeFrozen) return false;
+    camLock = null; camLerp = { scale, panX: cv.width / 2 - Math.max(0, Math.min(geo.W, x)) * scale,
+      panY: cv.height / 2 - Math.max(0, Math.min(geo.H, y)) * scale }; return true;
+  }
+  function presentationOverview() { if (camAnim || awakeFrozen) return false; camLock = null; camLerp = null; fitNeeded = true; return true; }
+  return { init, rebake, frameReviewRoom, presentationSnapshot, presentationFocus, presentationOverview, crt: CRT, slagLog: () => (slaglog ? slaglog.recent() : []),
     // REFIT freezes this world and can display its already-painted station.
     // Identity and both invalidation flags prevent borrowing another save or a
     // pre-edit bake. The editor replaces its reference on its first real edit.

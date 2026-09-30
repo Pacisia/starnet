@@ -1,0 +1,239 @@
+/* Reference client framing is presentation only. Every instrument and control reads live state. */
+@font-face{font-family:OSRSPlain;src:url('../assets/osrs-client/osrs-plain.ttf') format('truetype');font-display:swap}
+@font-face{font-family:OSRSBold;src:url('../assets/osrs-client/osrs-bold.ttf') format('truetype');font-display:swap}
+.osrs-station-status,.osrs-map-orbs,.osrs-client-tabs,.osrs-chat-filters,.osrs-player-prompt,.osrs-looks-button,.osrs-crew-look{display:none}
+body[data-station-theme][data-station-theme="osrs"]{--theme-text:#e1dac7;--ph-bright:#eddb89!important;--theme-edge:#756b53;--theme-panel:#29281f}
+body[data-station-theme][data-station-theme="osrs"] #screen-game.active{
+  grid-template-columns:calc(205px * var(--sn-unzoom,1)) minmax(0,1fr) calc(369px * var(--sn-unzoom,1))!important;
+  grid-template-rows:calc(119px * var(--sn-unzoom,1)) minmax(180px,1fr) calc(233px * var(--sn-unzoom,1)) calc(65px * var(--sn-unzoom,1))!important;
+  grid-template-areas:'top top overview' 'left center overview' 'chat chat overview' 'bot bot overview'!important;
+  padding:0!important;gap:0!important;background:#050509;
+}
+body[data-station-theme][data-station-theme="osrs"] #logo{display:none!important}
+body[data-station-theme][data-station-theme="osrs"] #topbar{
+  position:relative;min-height:0;padding:0;border:0;border-radius:0;box-shadow:none;
+  background:#050509 url('../assets/osrs-client/brand.svg') no-repeat left top!important;background-size:880px 119px!important;
+}
+body[data-station-theme][data-station-theme="osrs"] #topbar>:not(.station-ui-picker):not(.osrs-station-status):not(.osrs-looks-button){visibility:hidden;pointer-events:none}
+body[data-station-theme][data-station-theme="osrs"] .station-ui-picker{position:absolute;right:8px;bottom:9px;margin:0;color:#c8bb90;font:16px OSRSPlain,monospace;gap:8px}
+body[data-station-theme][data-station-theme="osrs"] .station-ui-picker select{min-height:26px;max-width:175px;padding:2px 6px;border:2px ridge #817556;border-radius:0;background:#29271e;color:#e6d18b;font:17px OSRSPlain,monospace}
+body[data-station-theme][data-station-theme="osrs"] .osrs-station-status{display:flex;align-items:center;gap:13px;position:absolute;right:4px;top:5px;min-width:270px;height:48px;padding:0 12px;border:3px ridge #7f7558;border-radius:3px;background:#25241b;font:23px OSRSPlain,monospace;box-sizing:border-box}
+body[data-station-theme][data-station-theme="osrs"] .osrs-station-status i{font:25px OSRSBold;color:#b0ba64;letter-spacing:-7px;margin-right:8px;font-style:normal}
+body[data-station-theme][data-station-theme="osrs"] .osrs-station-status span,.osrs-online{color:#5adb58}
+body[data-station-theme][data-station-theme="osrs"] .osrs-station-status time{margin-left:auto;color:#e8e3d5;border-left:1px solid #9b927a;padding-left:12px}
+body[data-station-theme][data-station-theme="osrs"] #stage-wrap{border:0;background:#050509;box-shadow:none;border-radius:0}
+body[data-station-theme][data-station-theme="osrs"] #stage-wrap::before,body[data-station-theme][data-station-theme="osrs"] .cam-hud{display:none}
+body[data-station-theme][data-station-theme="osrs"] #left{
+  border:16px solid transparent;border-image:url('../assets/osrs-client/nav-frame.svg') 16 stretch;
+  background:#29281f url('../assets/osrs-client/panel-texture.svg') repeat!important;box-shadow:none;border-radius:0;overflow:auto;padding:0;
+}
+body[data-station-theme][data-station-theme="osrs"] #left>:not(.station-game-nav){display:none!important}
+body[data-station-theme][data-station-theme="osrs"] #left.osrs-projects-open #ws-wrap{display:block!important}
+body[data-station-theme][data-station-theme="osrs"] .station-game-nav{padding:0;margin:-3px -7px;gap:4px;border:0;display:flex;flex-direction:column}
+body[data-station-theme][data-station-theme="osrs"] .station-game-nav button{flex:0 0 57px;min-height:57px;padding:2px 1px;gap:7px;color:#ded5b7;font:25px OSRSPlain,monospace;text-shadow:1px 2px #090903}
+body[data-station-theme][data-station-theme="osrs"] .station-game-nav button[aria-current="page"]{border:2px ridge #776849;border-radius:2px;background:#514b32a1;color:#f5dc7c}
+body[data-station-theme][data-station-theme="osrs"] .osrs-nav-icon{display:inline-block;flex:0 0 46px;width:46px;height:46px;font-size:0;background:url('../assets/osrs-client/reference.jpg') no-repeat;background-size:1536px 1024px;font-style:normal;filter:none}
+body[data-station-theme][data-station-theme="osrs"] .icon-station{background-position:-17px -138px}
+body[data-station-theme][data-station-theme="osrs"] .icon-agents{background-position:-12px -197px}
+body[data-station-theme][data-station-theme="osrs"] .icon-missions{background-position:-12px -261px}
+body[data-station-theme][data-station-theme="osrs"] .icon-projects{background-position:-12px -322px}
+body[data-station-theme][data-station-theme="osrs"] .icon-deliverables{background-position:-12px -384px}
+body[data-station-theme][data-station-theme="osrs"] .icon-connectors{background-position:-12px -445px}
+body[data-station-theme][data-station-theme="osrs"] .icon-analytics{background-position:-12px -508px}
+body[data-station-theme][data-station-theme="osrs"] .icon-settings{background-position:-12px -568px}
+body[data-station-theme][data-station-theme="osrs"] #station-game-overview{
+  position:relative;display:flex;gap:0;padding:0 12px 65px;border:0;border-radius:0;box-shadow:none;overflow:hidden;
+  background:#29281f url('../assets/osrs-client/panel-texture.svg') repeat!important;font:23px/1.12 OSRSPlain,monospace;color:#e5dfcf;
+}
+body[data-station-theme][data-station-theme="osrs"] #station-game-overview::after{content:'';position:absolute;inset:302px 0 64px;border:12px solid transparent;border-image:url('../assets/osrs-client/panel-frame.svg') 12 stretch;pointer-events:none}
+body[data-station-theme][data-station-theme="osrs"] .station-map-shell{height:306px;flex:0 0 306px;margin:0 -12px;background:url('../assets/osrs-client/minimap-frame.svg') no-repeat;background-size:100% 100%}
+body[data-station-theme][data-station-theme="osrs"] #station-minimap{position:absolute;width:280px;height:280px;left:90px;top:7px;margin:0;border-radius:50%;background:#000;clip-path:circle(47%);}
+body[data-station-theme][data-station-theme="osrs"] .station-map-north,body[data-station-theme][data-station-theme="osrs"] .station-map-legend{display:none}
+body[data-station-theme][data-station-theme="osrs"] .osrs-map-orbs{display:block;position:absolute;left:20px;top:97px;margin:0;z-index:1;pointer-events:none;font:24px OSRSPlain,monospace;color:#58df49;text-shadow:1px 2px #101309}
+body[data-station-theme][data-station-theme="osrs"] .osrs-map-orbs div{display:flex;width:42px;height:31px;align-items:center;justify-content:center;margin-bottom:20px;background:#423f33;border:2px ridge #5a5946;box-sizing:border-box}
+body[data-station-theme][data-station-theme="osrs"] .osrs-map-orbs dt{position:absolute;left:-9999px}
+body[data-station-theme][data-station-theme="osrs"] .osrs-map-orbs dd{margin:0}
+body[data-station-theme][data-station-theme="osrs"] .station-overview-heading{gap:8px;border:3px groove #615841;padding:5px 6px;height:74px;box-sizing:border-box;margin:0 5px 5px;color:#ebd677;font:24px OSRSPlain,monospace;background:#16171059}
+body[data-station-theme][data-station-theme="osrs"] .station-overview-heading>.osrs-nav-icon{background-position:-16px -135px;flex-basis:48px;width:48px;height:48px}
+body[data-station-theme][data-station-theme="osrs"] .station-overview-heading small{font:22px OSRSPlain,monospace;margin-top:5px;color:#e5dfcf}
+body[data-station-theme][data-station-theme="osrs"] .station-overview-heading small .osrs-online{padding:0 9px;border-left:1px solid #9b927a;margin-left:9px}
+body[data-station-theme][data-station-theme="osrs"] .station-overview-stats{margin:0 5px 6px;border:3px groove #615841;padding:8px 11px;background:#1717104a;font:24px/1.2 OSRSPlain,monospace}
+body[data-station-theme][data-station-theme="osrs"] .station-overview-stats>div{margin:0;min-height:28px}
+body[data-station-theme][data-station-theme="osrs"] .station-overview-stats dd{color:#e7dfca}
+body[data-station-theme][data-station-theme="osrs"] :is(.station-mission-card,.station-crew-card){border:3px groove #615841;margin:0 5px 5px;background:#1617104a}
+body[data-station-theme][data-station-theme="osrs"] .station-mission-card{flex:0 0 auto;padding:4px 8px 9px;min-height:100px;box-sizing:border-box}
+body[data-station-theme][data-station-theme="osrs"] .station-side-title{font:23px OSRSPlain,monospace;margin:3px 0 5px;padding:0;color:#ead578;display:flex;align-items:center;gap:5px;min-height:28px}
+body[data-station-theme][data-station-theme="osrs"] .station-side-title i{height:36px;width:36px;flex-basis:36px;background-position:-19px -267px}
+body[data-station-theme][data-station-theme="osrs"] .station-current-work{padding-left:40px}
+body[data-station-theme][data-station-theme="osrs"] .station-current-work button{border:0;padding:0;background:none;font:21px OSRSPlain,monospace}
+body[data-station-theme][data-station-theme="osrs"] .station-current-work button b{font-weight:normal}
+body[data-station-theme][data-station-theme="osrs"] .station-current-work small{font:18px OSRSPlain,monospace}
+body[data-station-theme][data-station-theme="osrs"] .station-current-work .station-feed-empty{margin:0;font:20px/1.2 OSRSPlain,monospace;opacity:.9}
+body[data-station-theme][data-station-theme="osrs"] .station-crew-card{flex:1;min-height:0;padding:6px 8px 8px;overflow:auto}
+body[data-station-theme][data-station-theme="osrs"] .station-map-crew{gap:0}
+body[data-station-theme][data-station-theme="osrs"] .station-crew-entry{gap:7px;min-height:32px;padding:0 2px;font:20px OSRSPlain,monospace;border:0}
+body[data-station-theme][data-station-theme="osrs"] .station-crew-entry>span:nth-child(2){display:flex;align-items:center;gap:8px}
+body[data-station-theme][data-station-theme="osrs"] .station-crew-entry b{flex:1}
+body[data-station-theme][data-station-theme="osrs"] .station-crew-entry small{flex:0 0 110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:19px OSRSPlain,monospace;color:#d1c9b7;margin:0}
+body[data-station-theme][data-station-theme="osrs"] .station-npc-mark{flex:0 0 25px;height:32px;width:25px;font-size:0;background:url('../assets/osrs-client/npc-atlas.png') no-repeat;background-size:204.8px 136.53px;background-position:calc(var(--npc-col)*-25.6px) 0;filter:none}
+body[data-station-theme][data-station-theme="osrs"] .station-crew-entry>i{display:none}
+body[data-station-theme][data-station-theme="osrs"] .station-side-actions{display:none}
+body[data-station-theme][data-station-theme="osrs"] .station-equipment-detail{flex:0 0 auto;margin:3px 6px;padding:6px;font:17px OSRSPlain,monospace;background:#26261d}
+body[data-station-theme][data-station-theme="osrs"] .osrs-client-tabs{display:flex;position:absolute;bottom:0;left:0;right:0;height:65px;background:#393429 url('../assets/osrs-client/tabs-frame.svg') center/100% 100%;border-top:3px ridge #6e6551;box-sizing:border-box}
+body[data-station-theme][data-station-theme="osrs"] .osrs-client-tabs button{flex:1;min-width:0;margin:0;border:2px ridge #756a4e;border-radius:6px;color:#ecda91;background:#38372b url('../assets/osrs-client/reference.jpg') no-repeat;background-size:1536px 1024px;background-position:calc(-1040px - var(--tab-index)*61px) -960px;cursor:pointer}
+body[data-station-theme][data-station-theme="osrs"] .osrs-client-tabs button:hover,body[data-station-theme][data-station-theme="osrs"] .osrs-client-tabs button:focus-visible{border-color:#cbb76b;outline:2px solid #d7bc5f;outline-offset:-3px}
+body[data-station-theme][data-station-theme="osrs"] #screen-game #chat-panel{
+  border:12px solid transparent;border-image:url('../assets/osrs-client/chat-frame.svg') 12 stretch;border-radius:0;box-shadow:none;padding:0;
+  background:#c3b48c url('../assets/osrs-client/parchment.svg') no-repeat!important;background-size:100% 100%!important;
+}
+body[data-station-theme][data-station-theme="osrs"] #chat-panel>h3,body[data-station-theme][data-station-theme="osrs"] .station-feed-tabs,body[data-station-theme][data-station-theme="osrs"] #chat-panel .comms-idbar{display:none}
+body[data-station-theme][data-station-theme="osrs"] #chat-panel:focus-within .comms-idbar,body[data-station-theme][data-station-theme="osrs"] #chat-panel.osrs-controls-open .comms-idbar{display:flex;min-height:26px;padding:0 8px;border-bottom:1px solid #918364}
+body[data-station-theme][data-station-theme="osrs"] #chat-panel.osrs-controls-open>h3{display:flex;font:17px OSRSPlain,monospace}
+body[data-station-theme][data-station-theme="osrs"] #station-event-log:not([hidden]){padding:0 10px 5px 8px;scrollbar-color:#807557 #b5a780}
+body[data-station-theme][data-station-theme="osrs"] .station-event{margin:1px 0;font:25px/1.1 OSRSPlain,monospace;color:#17180f;text-shadow:none}
+body[data-station-theme][data-station-theme="osrs"] .station-event b{color:#292bab}
+body[data-station-theme][data-station-theme="osrs"] .station-event.system b{color:#292bab}
+body[data-station-theme][data-station-theme="osrs"] .station-event.error b{color:#a5291d}
+body[data-station-theme][data-station-theme="osrs"] .station-event time{opacity:1;margin-right:3px}
+body[data-station-theme][data-station-theme="osrs"] .station-feed-empty{font:22px/1.15 OSRSPlain,monospace}
+body[data-station-theme][data-station-theme="osrs"] #chat-panel #chat-inputrow{background:#cabc97;border-top:1px solid #8d8161;padding:0 4px!important;margin:0}
+body[data-station-theme][data-station-theme="osrs"] #chat-panel .chat-editline{padding:0;background:transparent;gap:7px;align-items:center;min-height:27px}
+body[data-station-theme][data-station-theme="osrs"] #chat-panel .prompt{display:none}
+body[data-station-theme][data-station-theme="osrs"] .osrs-player-prompt{display:inline;color:#29271d;font:23px OSRSPlain,monospace}
+body[data-station-theme][data-station-theme="osrs"] #chat-panel #chat-input{min-height:25px;line-height:26px;padding:0;color:#262515;font:23px/26px OSRSPlain,monospace}
+body[data-station-theme][data-station-theme="osrs"] #chat-panel #chat-input::placeholder{color:#5a533b}
+body[data-station-theme][data-station-theme="osrs"] #chat-panel .chat-tools{display:none}
+body[data-station-theme][data-station-theme="osrs"] #chat-panel:focus-within .chat-tools,body[data-station-theme][data-station-theme="osrs"] #chat-panel.osrs-controls-open .chat-tools{display:flex}
+body[data-station-theme][data-station-theme="osrs"] #chat-panel :is(.comms-agent-select,.comms-agent-model){font-family:OSRSPlain,monospace}
+body[data-station-theme][data-station-theme="osrs"] #bottombar{border:0;border-top:3px ridge #796d51;border-radius:0;padding:5px 7px;gap:5px;background:#29271d!important;box-shadow:none}
+body[data-station-theme][data-station-theme="osrs"] .osrs-chat-filters{display:flex;flex:1;min-width:0;gap:5px;height:100%}
+body[data-station-theme][data-station-theme="osrs"] .osrs-chat-filters button{flex:1;min-width:0;border:3px ridge #74694e;border-radius:5px;color:#f1ecd9;background:linear-gradient(#514d3b,#29281c);font:22px/1 OSRSPlain,monospace;cursor:pointer;text-shadow:1px 1px #000}
+body[data-station-theme][data-station-theme="osrs"] .osrs-chat-filters button small{display:block;font:21px OSRSPlain;color:#59d943;visibility:hidden}
+body[data-station-theme][data-station-theme="osrs"] .osrs-chat-filters button[aria-pressed="true"]{background:linear-gradient(#6a6145,#403823);border-color:#a1946d}
+body[data-station-theme][data-station-theme="osrs"] .osrs-chat-filters button[aria-pressed="true"] small{visibility:visible}
+body[data-station-theme][data-station-theme="osrs"] #bottombar .bb-grp{height:48px!important;min-width:0;padding:4px 7px!important;font:19px OSRSPlain,monospace}
+body[data-station-theme][data-station-theme="osrs"] #bottombar .bb-gi{display:none}
+body[data-station-theme][data-station-theme="osrs"] #bottombar .bb-right{display:none}
+body[data-station-theme][data-station-theme="osrs"] #screen-game.active.comms-expanded{grid-template-columns:minmax(0,1fr)!important;grid-template-rows:119px minmax(0,1fr) 65px!important;grid-template-areas:'top' 'chat' 'bot'!important}
+@media(max-height:870px) and (min-width:1101px){
+  body[data-station-theme][data-station-theme="osrs"] #screen-game.active{grid-template-rows:100px minmax(160px,1fr) 190px 55px!important}
+  body[data-station-theme][data-station-theme="osrs"] #topbar{background-size:740px 100px!important}
+  body[data-station-theme][data-station-theme="osrs"] .station-map-shell{height:250px;flex-basis:250px;background-size:369px 306px;background-position:center top}
+  body[data-station-theme][data-station-theme="osrs"] #station-minimap{width:225px;height:225px;top:10px;left:115px}
+  body[data-station-theme][data-station-theme="osrs"] #station-game-overview::after{top:250px}
+  body[data-station-theme][data-station-theme="osrs"] .station-overview-stats{font-size:20px;padding:5px 9px}
+  body[data-station-theme][data-station-theme="osrs"] .station-overview-stats>div{min-height:22px}
+  body[data-station-theme][data-station-theme="osrs"] .station-overview-heading{height:62px;font-size:21px}
+  body[data-station-theme][data-station-theme="osrs"] .station-mission-card{min-height:80px}
+  body[data-station-theme][data-station-theme="osrs"] .station-crew-entry{min-height:29px;font-size:18px}
+}
+@media(max-width:1100px) and (min-width:861px){
+  body[data-station-theme][data-station-theme="osrs"] #screen-game.active{grid-template-columns:165px minmax(0,1fr) 300px!important;grid-template-rows:100px minmax(160px,1fr) 220px 55px!important}
+  body[data-station-theme][data-station-theme="osrs"] #topbar{background-size:700px 95px!important}
+  body[data-station-theme][data-station-theme="osrs"] .station-game-nav button{font-size:20px;gap:0}
+  body[data-station-theme][data-station-theme="osrs"] .station-map-shell{height:250px;flex-basis:250px;background-size:300px 249px}
+  body[data-station-theme][data-station-theme="osrs"] #station-minimap{width:227px;height:227px;left:73px;top:6px}
+  body[data-station-theme][data-station-theme="osrs"] #station-game-overview::after{top:249px}
+  body[data-station-theme][data-station-theme="osrs"] .osrs-map-orbs{left:16px;top:79px;font-size:19px}
+  body[data-station-theme][data-station-theme="osrs"] .osrs-map-orbs div{width:34px;height:25px;margin-bottom:16px}
+  body[data-station-theme][data-station-theme="osrs"] .station-overview-heading{height:66px;font-size:21px;gap:3px;padding:3px}
+  body[data-station-theme][data-station-theme="osrs"] .station-overview-heading small{font-size:18px}
+  body[data-station-theme][data-station-theme="osrs"] .station-overview-stats{font-size:20px}
+  body[data-station-theme][data-station-theme="osrs"] .station-crew-entry{font-size:18px}
+  body[data-station-theme][data-station-theme="osrs"] .station-crew-entry small{flex-basis:80px;font-size:17px}
+  body[data-station-theme][data-station-theme="osrs"] #bottombar .bb-grp{font-size:16px;padding:2px 4px!important;height:43px!important}
+  body[data-station-theme][data-station-theme="osrs"] .osrs-chat-filters button{font-size:18px}
+}
+@media(max-width:860px){
+  body[data-station-theme][data-station-theme="osrs"] #screen-game.active{grid-template-columns:minmax(0,1fr)!important;grid-template-rows:80px minmax(175px,.8fr) minmax(260px,1fr) 58px!important;grid-template-areas:'top' 'center' 'chat' 'bot'!important;padding:0;gap:0}
+  body[data-station-theme][data-station-theme="osrs"] #topbar{background-size:440px 59.5px!important}
+  body[data-station-theme][data-station-theme="osrs"] .osrs-station-status{min-width:0;right:4px;top:54px;height:24px;padding:0 5px;font-size:16px;border-width:1px;gap:7px}
+  body[data-station-theme][data-station-theme="osrs"] .osrs-station-status i{font-size:15px}
+  body[data-station-theme][data-station-theme="osrs"] .station-ui-picker{left:5px;right:auto;bottom:2px;gap:2px}
+  body[data-station-theme][data-station-theme="osrs"] .station-ui-picker select{font-size:15px;min-height:22px;max-width:147px;border-width:1px}
+  body[data-station-theme][data-station-theme="osrs"] #station-game-overview{position:absolute;top:85px;right:4px;width:110px;max-height:110px;height:110px;padding:0;border:1px ridge #9b8b5a;border-radius:50%;background:#050509!important;z-index:30}
+  body[data-station-theme][data-station-theme="osrs"] #station-game-overview::after{display:none}
+  body[data-station-theme][data-station-theme="osrs"] .station-map-shell{height:110px;flex-basis:110px;margin:0;background:none}
+  body[data-station-theme][data-station-theme="osrs"] #station-minimap{left:0;top:0;width:110px;height:110px;clip-path:none}
+  body[data-station-theme][data-station-theme="osrs"] #bottombar{flex-wrap:wrap;height:58px;padding:2px;gap:2px;align-content:center}
+  body[data-station-theme][data-station-theme="osrs"] .osrs-chat-filters{width:100%;flex:0 0 100%;height:25px;gap:2px}
+  body[data-station-theme][data-station-theme="osrs"] .osrs-chat-filters button{font-size:15px;border-width:1px;border-radius:2px}
+  body[data-station-theme][data-station-theme="osrs"] .osrs-chat-filters button small{display:none}
+  body[data-station-theme][data-station-theme="osrs"] #bottombar .bb-grp{height:24px!important;font-size:16px;border-width:1px!important;padding:1px 6px!important}
+  body[data-station-theme][data-station-theme="osrs"] #screen-game #chat-panel{border-width:8px}
+  body[data-station-theme][data-station-theme="osrs"] .station-event{font-size:21px}
+  body[data-station-theme][data-station-theme="osrs"] .osrs-player-prompt{font-size:18px}
+  body[data-station-theme][data-station-theme="osrs"] #chat-panel #chat-input{font-size:20px}
+  body[data-station-theme][data-station-theme="osrs"] #screen-game.active.comms-expanded{grid-template-rows:80px minmax(0,1fr) 58px!important}
+}
+@media(prefers-reduced-motion:reduce){body[data-station-theme][data-station-theme="osrs"] *{scroll-behavior:auto}}
+
+/* The native client has cabinet overlays and pinned rails. Its controls live in the dock here. */
+body[data-station-theme][data-station-theme="osrs"] :is(#topbar,#left,#chat-panel,#bottombar)::before,
+body[data-station-theme][data-station-theme="osrs"] :is(#topbar,#left,#chat-panel,#bottombar)::after{display:none!important}
+body[data-station-theme][data-station-theme="osrs"] :is(#wr-bottom,#wr-bot,#wr-top,.widget-rail){display:none!important}
+body[data-station-theme][data-station-theme="osrs"] #topbar{background-size:calc(880px * var(--sn-unzoom,1)) calc(119px * var(--sn-unzoom,1))!important}
+body[data-station-theme][data-station-theme="osrs"] #station-game-overview{padding-left:calc(12px * var(--sn-unzoom,1));padding-right:calc(12px * var(--sn-unzoom,1));padding-bottom:calc(65px * var(--sn-unzoom,1))}
+body[data-station-theme][data-station-theme="osrs"] .station-map-shell{height:calc(306px * var(--sn-unzoom,1));flex-basis:calc(306px * var(--sn-unzoom,1));margin-left:calc(-12px * var(--sn-unzoom,1));margin-right:calc(-12px * var(--sn-unzoom,1))}
+body[data-station-theme][data-station-theme="osrs"] #station-minimap{left:calc(90px * var(--sn-unzoom,1));top:calc(7px * var(--sn-unzoom,1));width:calc(280px * var(--sn-unzoom,1));height:calc(280px * var(--sn-unzoom,1))}
+body[data-station-theme][data-station-theme="osrs"] .osrs-map-orbs{left:calc(20px * var(--sn-unzoom,1));top:calc(103px * var(--sn-unzoom,1))}
+body[data-station-theme][data-station-theme="osrs"] .osrs-map-orbs div{width:calc(46px * var(--sn-unzoom,1));height:calc(34px * var(--sn-unzoom,1));margin-bottom:calc(17px * var(--sn-unzoom,1))}
+body[data-station-theme][data-station-theme="osrs"] #station-game-overview::after{top:calc(302px * var(--sn-unzoom,1));bottom:calc(64px * var(--sn-unzoom,1))}
+body[data-station-theme][data-station-theme="osrs"] #chat-panel .chat-tools{display:none!important}
+body[data-station-theme][data-station-theme="osrs"] #chat-panel:focus-within .chat-tools,
+body[data-station-theme][data-station-theme="osrs"] #chat-panel.osrs-controls-open .chat-tools{display:flex!important}
+body[data-station-theme][data-station-theme="osrs"] .osrs-client-tabs{height:calc(65px * var(--sn-unzoom,1))}
+body[data-station-theme][data-station-theme="osrs"] #bottombar .bb-grp{font:19px OSRSPlain,monospace!important}
+@media(max-width:860px){
+  body[data-station-theme][data-station-theme="osrs"] #topbar{background-size:440px 59.5px!important}
+  body[data-station-theme][data-station-theme="osrs"] .station-map-shell{margin:0;height:110px;flex-basis:110px}
+  body[data-station-theme][data-station-theme="osrs"] #station-minimap{left:0;top:0;width:110px;height:110px}
+}
+body[data-station-theme][data-station-theme="osrs"] .station-npc-mark:is(.npc-player,.npc-scout){background-image:url('../assets/osrs-client/traveller-atlas.png');background-size:112px 64px;background-position:0 0}
+body[data-station-theme][data-station-theme="osrs"] .station-npc-mark.npc-scout{background-position:0 -32px}
+body[data-station-theme][data-station-theme="osrs"] .osrs-map-orbs div:nth-child(4){margin-left:calc(44px * var(--sn-unzoom,1))}
+
+/* The reference room rises behind the header; the brand and controls remain in front. */
+@media(min-width:1101px) and (min-height:871px){
+  body[data-station-theme][data-station-theme="osrs"] #stage-wrap{margin-top:calc(-29px * var(--sn-unzoom,1));height:calc(100% + 29px * var(--sn-unzoom,1))}
+  body[data-station-theme][data-station-theme="osrs"] #topbar{z-index:1;background-color:transparent!important}
+}
+body[data-station-theme][data-station-theme="osrs"] .osrs-looks-button{display:block;position:absolute;right:330px;bottom:10px;padding:3px 8px;min-height:26px;border:2px ridge #817556;background:#29271e;color:#e6d18b;font:17px OSRSPlain,monospace;cursor:pointer}
+.station-crew-row{display:flex;min-width:0;align-items:center}
+.station-crew-row>.station-crew-entry{flex:1;min-width:0}
+body[data-station-theme][data-station-theme="osrs"] .station-crew-entry>span:nth-child(2){min-width:0;flex:1}
+body[data-station-theme][data-station-theme="osrs"] .station-crew-entry b{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:normal}
+body[data-station-theme][data-station-theme="osrs"] .station-crew-entry small{flex-basis:90px;font-size:18px}
+body[data-station-theme][data-station-theme="osrs"] canvas.station-npc-mark{background:none!important;object-fit:contain}
+body[data-station-theme][data-station-theme="osrs"] .osrs-crew-look{display:block;flex:0 0 21px;width:21px;padding:0;border:0;background:transparent;color:#b5a579;cursor:pointer;font:19px OSRSPlain}
+body[data-station-theme][data-station-theme="osrs"] .osrs-crew-look:hover{color:#ffe09b}
+body[data-station-theme][data-station-theme="osrs"] .osrs-dossier-look{background:#302e23;border:2px ridge #887858;color:#efd783;font:17px OSRSPlain;cursor:pointer}
+#osrs-appearance{box-sizing:border-box;width:min(1020px,calc((100vw - 28px) * var(--sn-unzoom,1)));max-height:calc((100dvh - 40px) * var(--sn-unzoom,1));padding:14px 18px;border:12px solid transparent;border-image:url('../assets/osrs-client/panel-frame.svg') 12 stretch;background:#29281f url('../assets/osrs-client/panel-texture.svg');color:#e5dcc6;font:21px/1.15 OSRSPlain,monospace;box-shadow:0 12px 75px #000;overflow:auto}
+#osrs-appearance::backdrop{background:#0009}
+#osrs-appearance header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;border-bottom:2px groove #7c7258;padding:0 0 10px}
+#osrs-appearance h2{font:29px OSRSBold,monospace;color:#eddb89;margin:0 0 4px}
+#osrs-appearance p{margin:0;color:#cfc3a6}
+#osrs-appearance button{font-family:OSRSPlain,monospace;cursor:pointer}
+#osrs-appearance .osrs-appearance-close{font-size:22px;min-width:32px;min-height:32px;color:#ddc786;background:#352e22;border:2px ridge #837455}
+.osrs-appearance-agent{display:flex;align-items:center;gap:12px;padding:12px 0;flex-wrap:wrap}
+#osrs-appearance select{min-width:170px;min-height:34px;background:#201f18;border:2px ridge #817456;color:#f0dc99;font:22px OSRSPlain;padding:3px 8px}
+#osrs-appearance-role{color:#bfb7a5;font-size:19px}
+.osrs-look-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+#osrs-appearance .osrs-look-option{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;padding:7px 5px;border:2px groove #71644a;background:#18191288;color:#e6d7ad;min-height:180px}
+#osrs-appearance .osrs-look-option[aria-pressed="true"]{background:#51452a;border-color:#efd17c;box-shadow:inset 0 0 0 1px #c69b48}
+#osrs-appearance .osrs-look-option:hover{background-color:#393527}
+#osrs-appearance .osrs-look-option b{font:19px OSRSBold}
+#osrs-appearance .osrs-look-option small{font:15px/1.1 OSRSPlain;color:#c2b89f}
+#osrs-appearance canvas{height:106px;width:76px;max-width:100%;object-fit:contain}
+#osrs-appearance footer{padding-top:13px;font:18px OSRSPlain;color:#c6ba98}
+#osrs-appearance button:focus-visible,body[data-station-theme][data-station-theme="osrs"] [data-osrs-looks]:focus-visible{outline:2px solid #f4d887;outline-offset:2px}
+@media(max-width:1100px){body[data-station-theme][data-station-theme="osrs"] .osrs-looks-button{right:300px;font-size:15px}}
+@media(max-width:860px){
+  body[data-station-theme][data-station-theme="osrs"] .osrs-looks-button{left:185px;right:auto;bottom:2px;font-size:15px;padding:2px 5px;min-height:22px;border-width:1px}
+  #osrs-appearance{padding:9px;border-width:8px;width:calc((100vw - 16px) * var(--sn-unzoom,1));max-height:calc((100dvh - 20px) * var(--sn-unzoom,1))}
+  .osrs-look-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+  #osrs-appearance .osrs-look-option{padding:5px 3px;min-height:152px}
+  #osrs-appearance .osrs-look-option b{font-size:17px}
+  #osrs-appearance .osrs-look-option small{font-size:14px}
+  #osrs-appearance canvas{height:90px;width:64px}
+}

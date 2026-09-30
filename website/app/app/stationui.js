@@ -4414,6 +4414,7 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
         ? 'No API keys connected. Paste a key here to reconnect - it stays on this machine.'
         : 'Add a ' + esc(provName(provider)) + ' key while keeping your ChatGPT sign-in connected.') + '</p>' +
       '<div class="key-edit">' +
+      (provider === 'custom' ? '<input type="url" class="key-input base-input" id="key-base-new" placeholder="endpoint URL, e.g. https://host/v1" value="' + esc((H() && H().getBaseUrl && H().getBaseUrl('custom')) || '') + '" autocomplete="off" spellcheck="false">' : '') +
       '<input type="password" class="key-input" id="key-in-new" placeholder="paste ' + esc(provName(provider)) + ' key..." autocomplete="off" spellcheck="false">' +
       '<button class="bb sm" data-act="add" data-provider="' + esc(provider) + '">SAVE</button>' +
       '</div></div>';
@@ -4482,6 +4483,7 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
         (wantsOAuthSignin ? '<button class="bb sm prov-addkey" data-act="prov-oauth-signin" data-provider="' + esc(p.id) + '" aria-label="Sign in to ' + esc(p.name) + '" title="device-code sign-in — no API key needed">⏼ SIGN IN</button>' : '') +
         (wantsInline
           ? '<div class="key-edit prov-key-edit" id="prov-key-edit-' + esc(p.id) + '" hidden>' +
+            (p.id === 'custom' ? '<input type="url" class="key-input base-input" id="prov-base-in-custom" placeholder="endpoint URL, e.g. https://host/v1" value="' + esc((H() && H().getBaseUrl && H().getBaseUrl('custom')) || '') + '" autocomplete="off" spellcheck="false">' : '') +
             '<input type="password" class="key-input" id="prov-key-in-' + esc(p.id) + '" placeholder="paste ' + esc(p.name) + ' key…" autocomplete="off" spellcheck="false">' +
             '<button class="bb sm" data-act="prov-add-save" data-provider="' + esc(p.id) + '">SAVE</button>' +
             '</div>'
@@ -4781,10 +4783,20 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
           const v = inp ? inp.value.trim() : '';
           if (!v) { sfx('bad'); return; }
           const provider = b.dataset.provider || activeProv();
+          // personal fork (27 Sep 2026): the CUSTOM provider needs its endpoint URL before the key can be verified.
+          const baseInp = body.querySelector('#key-base-new');
+          let baseReady = Promise.resolve();
+          if (provider === 'custom' && baseInp) {
+            let bu = baseInp.value.trim();
+            if (!bu) { sfx('bad'); notify('enter the endpoint URL first (e.g. https://host/v1)', 'bad'); return; }
+            if (!/^https?:\/\//i.test(bu)) bu = 'https://' + bu.replace(/^\/+/, '');
+            try { new URL(bu); } catch (_) { sfx('bad'); notify("that endpoint doesn't look like a URL", 'bad'); return; }
+            baseReady = Promise.resolve(h.setBaseUrl && h.setBaseUrl(bu, 'custom'));
+          }
           // success UI waits for the PROVEN store: on desktop setKey resolves only after the keychain write lands
           // (browser localStorage resolves immediately). The old fire-and-forget toasted "✓ stored in your OS
           // keychain" over a rejected write — a keyless station that claimed connected with no re-entry hint.
-          Promise.resolve(h.validateAndSetKey ? h.validateAndSetKey(v, provider) : h.setKey(v, provider)).then(() => {
+          baseReady.then(() => (h.validateAndSetKey ? h.validateAndSetKey(v, provider) : h.setKey(v, provider))).then(() => {
             invalidateProviderHealth(provider);
             notify('✓ connected ' + provName(provider) + ' API key — ' + keyStoreClause(), 'good');
             if (typeof ModelDock !== 'undefined' && ModelDock.reflect) ModelDock.reflect();   // clear the dock's no-key warning the instant a key lands
@@ -4896,8 +4908,18 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
       const v = inp ? inp.value.trim() : '';
       if (!v) { sfx('bad'); if (inp) inp.focus(); return; }
       if (!h || !h.setKey) { sfx('bad'); return; }
+      // personal fork (27 Sep 2026): CUSTOM needs its endpoint URL saved before the key can be verified.
+      let baseReady = Promise.resolve();
+      const baseInp = body.querySelector('#prov-base-in-custom');
+      if (provider === 'custom' && baseInp) {
+        let bu = baseInp.value.trim();
+        if (!bu) { sfx('bad'); notify('enter the endpoint URL first (e.g. https://host/v1)', 'bad'); baseInp.focus(); return; }
+        if (!/^https?:\/\//i.test(bu)) bu = 'https://' + bu.replace(/^\/+/, '');
+        try { new URL(bu); } catch (_) { sfx('bad'); notify("that endpoint doesn't look like a URL", 'bad'); return; }
+        baseReady = Promise.resolve(h.setBaseUrl && h.setBaseUrl(bu, 'custom'));
+      }
       // same proven-store contract as the key-list paths: success UI only after setKey resolves.
-      Promise.resolve(h.validateAndSetKey ? h.validateAndSetKey(v, provider) : h.setKey(v, provider)).then(() => {
+      baseReady.then(() => (h.validateAndSetKey ? h.validateAndSetKey(v, provider) : h.setKey(v, provider))).then(() => {
         invalidateProviderHealth(provider);
         notify('✓ connected ' + provName(provider) + ' API key — ' + keyStoreClause(), 'good');
         if (typeof ModelDock !== 'undefined' && ModelDock.reconcile) ModelDock.reconcile().catch(() => ModelDock.reflect && ModelDock.reflect());
@@ -6147,6 +6169,7 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
       '<div class="set-themes" id="set-lv-voices"><span class="dim">reading the built-in voice list…</span></div>';
 
     const secAppearance =
+      (typeof PresentationThemes !== 'undefined' ? PresentationThemes.settingsHTML() : '') +
       '<h4 class="ms-h">PHOSPHOR THEME</h4><div class="set-themes">' +
       THEMES.map(([t, c]) => '<button type="button" class="set-theme settings-swatch ' + (s.theme === t ? 'sel' : '') + '" aria-pressed="' + (s.theme === t ? 'true' : 'false') + '" data-t="' + t + '" aria-label="' + t + ' theme" title="' + t + '" style="--sw:' + c + '"></button>').join('') +
       '<button type="button" class="set-theme settings-swatch settings-swatch-custom ' + (s.theme === 'custom' ? 'sel' : '') + '" aria-pressed="' + (s.theme === 'custom' ? 'true' : 'false') + '" data-t="custom" id="set-theme-custom" aria-label="Custom color theme" title="Custom color" style="--sw:' + customSw + '"></button>' +

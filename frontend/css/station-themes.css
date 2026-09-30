@@ -1,0 +1,135 @@
+/* All art directions are opt-in. Original is the shipped cascade with only a UI picker added. */
+.station-ui-picker { display:flex; align-items:center; gap:7px; flex:0 0 auto; margin:0 10px; color:var(--ph-dim); font:13px 'VT323',monospace; letter-spacing:.5px; }
+.station-ui-picker select { max-width:175px; min-height:30px; color:var(--ph-bright); background:var(--panel,#101819); border:1px solid var(--ph-dim); border-radius:4px; padding:4px 7px; font:16px 'VT323',monospace; cursor:pointer; }
+.station-ui-picker select:focus-visible { outline:2px solid var(--ph-bright); outline-offset:3px; }
+#station-game-overview,.station-game-nav,.station-feed-tabs,#station-event-log { display:none; }
+.station-theme-cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:12px 0 22px; }
+.station-theme-card { display:flex; flex-direction:column; gap:8px; text-align:left; border:1px solid var(--ph-dim); background:var(--panel); color:var(--ph-bright); padding:10px; cursor:pointer; font:16px 'VT323',monospace; border-radius:5px; }
+.station-theme-card[aria-pressed="true"] { outline:2px solid var(--ph); outline-offset:1px; }
+.station-theme-card small { font:13px/1.3 'VT323',monospace; color:var(--ph-dim); }
+.station-theme-sample { position:relative; width:100%; height:68px; background:var(--sample-bg); border:4px ridge var(--sample-second); overflow:hidden; }
+.station-theme-sample::before { content:''; position:absolute; inset:12px 18px; border:2px solid var(--sample-second); background:repeating-linear-gradient(0deg,transparent 0 9px,color-mix(in srgb,var(--sample-second) 16%,transparent) 10px 11px); transform:skewX(-12deg); }
+.station-theme-sample i { position:absolute; right:8px; top:8px; width:22px; height:22px; border-radius:50%; border:2px solid var(--sample-accent); }
+.station-theme-sample b { position:absolute; left:36%; top:18px; color:var(--sample-accent); font-size:27px; }
+body:where([data-station-theme]:not([data-station-theme="original"])) {
+  --theme-frame:#2a392e; --theme-edge:#5c7161; --theme-text:#d3ddc5; --theme-panel:#12231f;
+  --ph:#d3c98e !important; --ph-bright:#f5e6b2 !important; --ph-dim:#a99e79 !important; --ph-glow:transparent !important;
+  --ph-faint:rgba(187,176,132,.13) !important; --ink:#101414; --panel:#17201c;
+}
+body[data-station-theme]:not([data-station-theme="original"])::before,
+body[data-station-theme]:not([data-station-theme="original"])::after { opacity:0 !important; }
+body[data-station-theme]:not([data-station-theme="original"]) #screen-game.active {
+  grid-template-columns:220px minmax(0,1fr) 285px !important;
+  grid-template-rows:64px minmax(180px,1fr) clamp(215px,29vh,300px) 48px !important;
+  grid-template-areas:'top top top' 'left center overview' 'chat chat overview' 'bot bot bot' !important;
+  gap:7px; padding:7px; background:#05090e;
+}
+body[data-station-theme]:not([data-station-theme="original"]) :is(#topbar,#left,#chat-panel,#bottombar,#station-game-overview) {
+  border:3px ridge var(--theme-edge); border-radius:2px; background:var(--theme-panel) !important;
+  box-shadow:inset 0 0 0 1px #080b09,0 2px 5px #000; backdrop-filter:none;
+}
+body[data-station-theme]:not([data-station-theme="original"]) #stage-wrap { border:3px ridge var(--theme-edge);border-radius:2px;box-shadow:none; }
+body[data-station-theme]:not([data-station-theme="original"]) #stage-wrap::before { background:none;box-shadow:none; }
+body[data-station-theme]:not([data-station-theme="original"]) .cam-c { display:none; }
+body[data-station-theme]:not([data-station-theme="original"]) .cam-label { background:rgba(0,0,0,.65); padding:4px 8px; color:var(--theme-text); }
+body[data-station-theme]:not([data-station-theme="original"]) :is(#crew-resizer,#comms-resizer) { display:none; }
+body[data-station-theme]:not([data-station-theme="original"]) .station-game-nav { display:grid;gap:3px;padding:9px 7px 12px;border-bottom:2px groove var(--theme-edge); }
+.station-game-nav button { display:flex;gap:12px;align-items:center;text-align:left;background:transparent;border:1px solid transparent;padding:7px 10px;color:var(--theme-text);font:22px 'VT323',monospace;cursor:pointer; }
+.station-game-nav button i { font:24px 'VT323',monospace; width:24px;text-align:center;color:var(--ph-bright); }
+.station-game-nav button:is(:hover,:focus-visible) { border-color:var(--theme-edge);background:rgba(221,199,141,.12);outline:none; }
+body[data-station-theme]:not([data-station-theme="original"]) #left { overflow-y:auto;min-height:0; }
+body[data-station-theme]:not([data-station-theme="original"]) #left>h3 { border:0;background:rgba(0,0,0,.25);font-size:16px; }
+body[data-station-theme]:not([data-station-theme="original"]) #station-game-overview { display:flex;grid-area:overview;flex-direction:column;min-height:0;overflow-y:auto;gap:4px;padding:8px;color:var(--theme-text);font:19px/1.1 'VT323',monospace; }
+.station-map-shell { position:relative;flex:0 0 auto; }
+#station-minimap { display:block;width:min(100%,258px);height:auto;margin:auto;cursor:crosshair;touch-action:manipulation; }
+#station-minimap:focus-visible { outline:2px solid var(--ph-bright);outline-offset:-2px;border-radius:50%; }
+.station-map-north { position:absolute;left:3px;top:8px;width:40px;height:40px;text-align:center;font:17px/1 'VT323',monospace;border:3px ridge var(--theme-edge);border-radius:50%;background:var(--theme-frame);color:var(--ph-bright); }
+.station-map-legend { display:flex;justify-content:center;gap:12px;color:var(--ph-dim);font-size:13px;margin:-3px 0 9px; }
+.station-overview-heading { display:flex;align-items:center;gap:12px;border:2px groove var(--theme-edge);padding:10px 7px;color:var(--ph-bright);font-size:21px; }
+.station-overview-heading>span { font-size:40px; }
+.station-overview-heading small { display:block;font-size:15px;color:var(--theme-text);margin-top:5px; }
+.station-overview-stats { border:2px groove var(--theme-edge);padding:9px;margin:0; }
+.station-overview-stats>div { display:flex;justify-content:space-between;gap:10px;margin:3px 0; }
+.station-overview-stats dd { margin:0;color:var(--ph-bright); }
+.station-side-title { margin:10px 5px 4px;color:var(--ph-bright);font:20px 'VT323',monospace; }
+.station-map-crew { display:flex;flex-direction:column;gap:3px; }
+.station-crew-entry { display:flex;align-items:center;gap:8px;border:1px solid transparent;color:var(--theme-text);background:transparent;text-align:left;padding:5px;font:18px 'VT323',monospace;cursor:pointer; }
+.station-crew-entry:hover,.station-crew-entry:focus-visible { border-color:var(--theme-edge);background:rgba(170,160,120,.12); }
+.station-crew-entry>span:nth-child(2) { flex:1;min-width:0; }
+.station-crew-entry b { display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:normal; }
+.station-crew-entry small { display:block;font:13px 'VT323',monospace;color:var(--ph-dim);margin-top:3px; }
+.station-npc-mark { width:24px;font-size:26px;text-align:center;color:var(--npc-color);filter:brightness(1.5); }
+.station-crew-entry>i { flex:0 0 5px;width:5px;height:5px;border-radius:50%;background:#727b66; }
+.station-crew-entry>i.working { background:#66bb6e; }.station-crew-entry>i.waiting { background:#dc925b; }
+.station-current-work button { width:100%;text-align:left;color:var(--theme-text);background:rgba(0,0,0,.17);padding:8px;border:1px solid var(--theme-edge);font:18px 'VT323',monospace;cursor:pointer; }
+.station-current-work small { display:block;color:var(--ph-dim);font-size:14px;margin-top:4px; }
+.station-side-actions { display:flex;gap:5px;padding-top:10px;margin-top:auto; }
+.station-side-actions button,.station-equipment-detail button { flex:1;padding:6px;background:var(--theme-frame);color:var(--ph-bright);border:2px ridge var(--theme-edge);font:16px 'VT323',monospace;cursor:pointer; }
+.station-equipment-detail { padding:8px;border:2px groove var(--theme-edge);font-size:16px; }
+.station-equipment-detail[hidden] { display:none; }.station-equipment-detail h4 { color:var(--ph-bright);text-transform:capitalize;margin:0; }.station-equipment-detail p { margin:5px 0; }
+body[data-station-theme]:not([data-station-theme="original"]) #chat-panel { min-width:0;min-height:0;border-radius:0; }
+body[data-station-theme]:not([data-station-theme="original"]) #chat-panel>h3 { padding:4px 10px;min-height:28px;background:rgba(0,0,0,.14);border-bottom:1px solid var(--theme-edge); }
+body[data-station-theme]:not([data-station-theme="original"]) .comms-idbar { padding:3px 10px;min-height:28px;margin:0; }
+body[data-station-theme]:not([data-station-theme="original"]) .comms-portrait { display:none; }
+body[data-station-theme]:not([data-station-theme="original"]) .comms-overline { display:none; }
+body[data-station-theme]:not([data-station-theme="original"]) .comms-identity { display:flex;align-items:center;gap:12px; }
+body[data-station-theme]:not([data-station-theme="original"]) .comms-agent-select { font-size:17px; }
+body[data-station-theme]:not([data-station-theme="original"]) .station-feed-tabs { display:flex;align-items:center;gap:5px;padding:4px 9px;border-bottom:1px solid var(--theme-edge); }
+.station-feed-tabs button,.station-feed-tabs select { padding:3px 7px;background:transparent;border:1px solid var(--theme-edge);color:inherit;font:16px 'VT323',monospace;cursor:pointer; }
+.station-feed-tabs button[aria-pressed="true"] { background:rgba(71,59,25,.2);font-weight:bold; }
+.station-feed-tabs select { margin-left:auto;max-width:125px; }
+body[data-station-theme]:not([data-station-theme="original"]) #station-event-log:not([hidden]) { display:block;flex:1;min-height:0;overflow-y:auto;padding:8px 12px; }
+body[data-station-theme]:not([data-station-theme="original"]) .station-activity-selected #chat-log { display:none; }
+.station-event { margin:2px 0;font:20px/1.2 'VT323',monospace;overflow-wrap:anywhere; }
+.station-event b { color:#2948a8;font-weight:normal; }.station-event.error b { color:#942e27; }.station-event.system b { color:#6e4e8d; }
+.station-event time { opacity:.75; }.station-feed-empty { margin:7px 5px;opacity:.7;font:16px/1.2 'VT323',monospace; }
+body[data-station-theme]:not([data-station-theme="original"]) #chat-inputrow { padding:4px 8px;margin-top:0; }
+body[data-station-theme]:not([data-station-theme="original"]) #chat-input { min-height:28px;max-height:72px;font-size:19px; }
+body[data-station-theme]:not([data-station-theme="original"]) .chat-editline { padding:3px 5px; }
+body[data-station-theme]:not([data-station-theme="original"]) #bottombar { padding:5px 8px; }
+body[data-station-theme]:not([data-station-theme="original"]) #bottombar .bb-grp { border:2px ridge var(--theme-edge) !important;border-radius:1px !important;background:var(--theme-frame) !important;color:var(--ph-bright);box-shadow:none !important; }
+body[data-station-theme]:not([data-station-theme="original"]) .term { border:3px ridge var(--theme-edge);background:var(--theme-panel);backdrop-filter:none;box-shadow:0 12px 45px #000a; }
+body[data-station-theme]:not([data-station-theme="original"]) #screen-game.active.comms-expanded { grid-template-columns:minmax(0,1fr) !important;grid-template-rows:64px minmax(0,1fr) 48px !important;grid-template-areas:'top' 'chat' 'bot' !important; }
+body[data-station-theme]:not([data-station-theme="original"]) #screen-game.comms-expanded #station-game-overview { display:none; }
+/* OSRS: shaped stone bevels, brass accents and a parchment conversation surface. */
+body[data-station-theme="osrs"] { --theme-frame:#494337;--theme-edge:#766d51;--theme-text:#d5cdb1;--theme-panel:#2d2b23; }
+body[data-station-theme="osrs"] :is(#topbar,#left,#bottombar,#station-game-overview,.term) { background:repeating-linear-gradient(112deg,#ffffff02 0 1px,transparent 1px 4px),linear-gradient(110deg,#343229,#23241e) !important; }
+body[data-station-theme="osrs"] #topbar { border-top-color:#928468; }
+body[data-station-theme="osrs"] #screen-game #chat-panel { background:radial-gradient(ellipse at 40% 10%,#d3c5a4,#b4a782) !important;--ph:#3b372a !important;--ph-bright:#443725 !important;--ph-dim:#64513a !important;--panel:#c3b591;--ink:#c3b591;--text:#302e22;--text-dim:#64513a;--text-bright:#332c21;--beat-face:#cabc97;--beat-edge:#a89b77;--beat-light:transparent;--gold:#675021;color:#302e22; }
+body[data-station-theme="osrs"] #chat-panel #chat-log :is(.cmsg,.beat-card) { color:#383324;border-color:#a89b77;background:#cabc97;box-shadow:none; }
+body[data-station-theme="osrs"] #chat-panel #chat-inputrow { background:#cabc97;border-color:#8b7f5f; }
+body[data-station-theme="osrs"] #chat-panel .chat-editline { background:rgba(235,221,186,.45); }
+body[data-station-theme="osrs"] #chat-panel #chat-input { color:#332e23;background:transparent; }
+body[data-station-theme="osrs"] #chat-panel #chat-input::placeholder { color:#5e523a;opacity:1; }
+body[data-station-theme="osrs"] .comms-agent-select { color:#2c4293 !important; }
+/* Neon: industrial native gear, angular housings, violet floors and cyan signals. */
+body[data-station-theme="cyberpunk"] { --theme-frame:#261734;--theme-edge:#65518e;--theme-text:#d6d8f4;--theme-panel:#130f23;--ph:#71efff !important;--ph-bright:#b8f8ff !important;--ph-dim:#ad94cf !important;--ph-faint:#71efff18 !important; }
+body[data-station-theme="cyberpunk"] #stage-wrap { border-color:#635980;box-shadow:inset 0 0 0 1px #ec62a86b; }
+body[data-station-theme="cyberpunk"] #topbar { border-bottom-color:#f764b2; }
+body[data-station-theme="cyberpunk"] .station-event b { color:#83f2ff; }
+body[data-station-theme="cyberpunk"] .station-event.error b { color:#ff8197; }
+body[data-station-theme="cyberpunk"] .station-event.system b { color:#dc9cfe; }
+body[data-station-theme="cyberpunk"] :is(.station-overview-heading,.station-overview-stats) { border:1px solid #514062;border-left:3px solid #fa64b3; }
+/* Holographic: cold translucent materials and blue-white projected figures. */
+body[data-station-theme="holographic"] { --theme-frame:#153647;--theme-edge:#39738a;--theme-text:#a9dce9;--theme-panel:#081d2b;--ph:#9ce9ff !important;--ph-bright:#d1f5ff !important;--ph-dim:#76b8cf !important;--ph-faint:#9ce9ff16 !important; }
+body[data-station-theme="holographic"] :is(#topbar,#left,#chat-panel,#bottombar,#station-game-overview) { border-width:1px;box-shadow:inset 0 0 25px #4999bb0f; }
+body[data-station-theme="holographic"] .station-event b { color:#b2f2ff; }
+body[data-station-theme="holographic"] .station-event.error b { color:#ffa49f; }
+body[data-station-theme="holographic"] .station-event.system b { color:#83b6ff; }
+@media(max-width:1100px) and (min-width:861px) {
+  body[data-station-theme]:not([data-station-theme="original"]) #screen-game.active { grid-template-columns:165px minmax(0,1fr) 235px !important; }
+  .station-game-nav button { font-size:19px;padding:5px 7px; }.station-ui-picker>span { display:none; }.station-ui-picker { margin:0 5px; }.station-ui-picker select { max-width:130px; }
+}
+@media(max-width:860px) {
+  .station-ui-picker { margin:0 3px; }.station-ui-picker>span { display:none; }.station-ui-picker select { max-width:118px;font-size:14px;min-height:25px; }
+  body[data-station-theme]:not([data-station-theme="original"]) #screen-game.active { grid-template-columns:minmax(0,1fr) !important;grid-template-rows:48px minmax(150px,.75fr) minmax(240px,1fr) minmax(46px,auto) !important;grid-template-areas:'top' 'center' 'chat' 'bot' !important;padding:4px;gap:4px; }
+  body[data-station-theme]:not([data-station-theme="original"]) #left { display:none; }
+  body[data-station-theme]:not([data-station-theme="original"]) #station-game-overview { position:absolute;top:59px;right:9px;z-index:30;width:102px;max-height:117px;overflow:hidden;padding:2px;border-width:1px; }
+  body[data-station-theme]:not([data-station-theme="original"]) #station-game-overview>:not(.station-map-shell) { display:none; }
+  .station-map-north { font-size:11px;left:0;top:0;width:22px;height:22px;border-width:1px; }.station-map-legend { display:none; }
+  body[data-station-theme]:not([data-station-theme="original"]) #topbar { padding:4px; }
+  body[data-station-theme]:not([data-station-theme="original"]) .tb-stats { margin-left:auto; }.station-event { font-size:18px; }
+  body[data-station-theme]:not([data-station-theme="original"]) #screen-game.active.comms-expanded { grid-template-rows:48px minmax(0,1fr) 46px !important; }
+}
+@media(max-width:480px) { .station-theme-cards { grid-template-columns:1fr; } }
+@media(prefers-reduced-motion:reduce) { .station-theme-card,.station-crew-entry { transition:none; } }

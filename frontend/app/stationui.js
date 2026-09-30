@@ -6170,6 +6170,7 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
       '<div class="set-themes" id="set-lv-voices"><span class="dim">reading the built-in voice list…</span></div>';
 
     const secAppearance =
+      (typeof PresentationThemes !== 'undefined' ? PresentationThemes.settingsHTML() : '') +
       '<h4 class="ms-h">PHOSPHOR THEME</h4><div class="set-themes">' +
       THEMES.map(([t, c]) => '<button type="button" class="set-theme settings-swatch ' + (s.theme === t ? 'sel' : '') + '" aria-pressed="' + (s.theme === t ? 'true' : 'false') + '" data-t="' + t + '" aria-label="' + t + ' theme" title="' + t + '" style="--sw:' + c + '"></button>').join('') +
       '<button type="button" class="set-theme settings-swatch settings-swatch-custom ' + (s.theme === 'custom' ? 'sel' : '') + '" aria-pressed="' + (s.theme === 'custom' ? 'true' : 'false') + '" data-t="custom" id="set-theme-custom" aria-label="Custom color theme" title="Custom color" style="--sw:' + customSw + '"></button>' +

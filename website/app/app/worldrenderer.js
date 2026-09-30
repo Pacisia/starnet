@@ -132,6 +132,7 @@ const WorldRenderer = (() => {
     }
     function drawBase(ctx) {
       if (baked && baked.baseCv) {
+        if (typeof StationPresentation !== 'undefined' && StationPresentation.drawBase(ctx, frame)) return;
         if (typeof IndustrialTextures !== 'undefined' && IndustrialTextures.drawBase(ctx, baked.baseCv)) return;
         ctx.drawImage(baked.baseCv, 0, 0);
       }
@@ -176,6 +177,7 @@ const WorldRenderer = (() => {
     }
     function stats() {
       return { generation: classic ? 'classic' : GENERATION, frames, rebuilds, entities: entityCount,
+        presentation: typeof PresentationThemes !== 'undefined' ? PresentationThemes.get() : 'original',
         frameIntervalMedianMs: percentile(elapsed, .5), frameIntervalP95Ms: percentile(elapsed, .95),
         renderMedianMs: percentile(durations, .5), renderP95Ms: percentile(durations, .95),
         lightingMedianMs: percentile(lightDurations, .5), samples: durations.length,
