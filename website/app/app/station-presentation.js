@@ -2,7 +2,7 @@
  * records. A renderer returns false/null to use StarNet's native art. No events, requests or saves. */
 'use strict';
 const StationPresentation = (() => {
-  const renderers = new Map();
+  const renderers = new Map(), viewRenderers=new Map();
   let lookupAgent = () => null, plate = null, plateSource = null, plateTheme = null, plateGeo = null;
   const selected = () => typeof PresentationThemes === 'undefined' ? 'original' : PresentationThemes.get();
   const ROLES = Object.freeze({
@@ -185,9 +185,13 @@ const StationPresentation = (() => {
     if(holo){ctx.strokeStyle='rgba(189,249,255,.7)';ctx.lineWidth=.4;for(let y=top;y<-2;y+=3){ctx.beginPath();ctx.moveTo(-4,y);ctx.lineTo(4,y);ctx.stroke();}}
     ctx.restore();return { top: body.lying?py-7:py+top-(fantasy&&kind==='mage'?7:0), height:body.lying?14:height, width:body.lying?height:14 };
   }
-  function reset() { plate=null;plateSource=null;plateTheme=null;plateGeo=null; }
+  function reset() { plate=null;plateSource=null;plateTheme=null;plateGeo=null;for(const renderer of viewRenderers.values())renderer.reset?.(); }
   function bind(options) { lookupAgent=options&&typeof options.agentRecord==='function'?options.agentRecord:()=>null; }
   function register(id, renderer) { if (id === 'original' || !renderer) return false;renderers.set(id,renderer);return true; }
-  return { bind, register, reset, roleFor, ROLES, CAPABILITIES, active: () => selected() !== 'original', drawBase, drawProp, drawBody };
+  function registerView(id, renderer) { if(id==='original'||!renderer)return false;viewRenderers.set(id,renderer);return true; }
+  function viewCall(method,...args){const renderer=viewRenderers.get(selected());return renderer&&typeof renderer[method]==='function'?renderer[method](...args):null;}
+  return { bind, register, registerView, reset, roleFor, ROLES, CAPABILITIES, active: () => selected() !== 'original', drawBase, drawProp, drawBody,
+    hasWorldRenderer:()=>viewRenderers.has(selected()),drawWorld:(...args)=>viewCall('draw',...args),
+    clientToWorld:(...args)=>viewCall('clientToWorld',...args),worldToCanvas:(...args)=>viewCall('worldToCanvas',...args) };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = StationPresentation;

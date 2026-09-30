@@ -228,4 +228,5 @@ const OSRSWorld = (() => {
   return {active,draw,reset,bind:fn=>{lookup=fn||(()=>null);},clientToWorld,worldToCanvas,clientHit,makeView,project,unproject,propIndex,
     ready:()=>!!(rects.npc&&rects.props&&rects.travellers),hitRects:()=>hitRects.map(r=>({...r})),bounds,outline:outerEdges};
 })();
+if(typeof StationPresentation!=='undefined')StationPresentation.registerView('osrs',OSRSWorld);
 if(typeof module!=='undefined'&&module.exports)module.exports=OSRSWorld;

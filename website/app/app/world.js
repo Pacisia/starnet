@@ -1831,8 +1831,8 @@ const World = (() => {
     return Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x < cv.width && y >= 0 && y < cv.height ? { x, y } : null;
   }
   function curvePoint(c) {
-    if (typeof OSRSWorld !== 'undefined' && OSRSWorld.active()) {
-      const projected = OSRSWorld.worldToCanvas((c.x-panX)/scale,(c.y-panY)/scale);
+    if (typeof StationPresentation !== 'undefined') {
+      const projected = StationPresentation.worldToCanvas?.((c.x-panX)/scale,(c.y-panY)/scale);
       if (projected) return projected;
     }
     if (typeof StationPresentation !== 'undefined' && StationPresentation.active()) return c;
@@ -1843,8 +1843,8 @@ const World = (() => {
     return { x: hw + nx * f * hw, y: hh + ny * f * hh };
   }
   function toWorld(ev) {
-    if (typeof OSRSWorld !== 'undefined' && OSRSWorld.active()) {
-      const projected = OSRSWorld.clientToWorld(ev,cv);if(projected)return projected;
+    if (typeof StationPresentation !== 'undefined') {
+      const projected = StationPresentation.clientToWorld?.(ev,cv);if(projected)return projected;
     }
     const c = uncurvePoint(toCanvas(ev));
     return c ? { x: (c.x - panX) / scale, y: (c.y - panY) / scale } : null;
@@ -6619,8 +6619,8 @@ const World = (() => {
     drawCRT(now);   // scanlines + fade, painted in-canvas at device-px OVER the warped feed (no moiré)
     // Presentation-only replacement, AFTER all native conveyor ticks, deliveries, prop updates and
     // simulation work. Never early-return around that functional work when an alternate view is selected.
-    if (typeof OSRSWorld !== 'undefined' && OSRSWorld.active())
-      OSRSWorld.draw(ctx,cv,{snapshot:presentationSnapshot(),now,reducedMotion:reduceMotion()});
+    if (typeof StationPresentation !== 'undefined' && StationPresentation.hasWorldRenderer?.())
+      StationPresentation.drawWorld(ctx,cv,{snapshot:presentationSnapshot(),now,reducedMotion:reduceMotion()});
     paintStageHeartbeat();   // the frame's last act: the one opaque pixel a dead stage context cannot fake (see watchStageLoss)
     reviewMark('static');
     updateCameraHud(now);

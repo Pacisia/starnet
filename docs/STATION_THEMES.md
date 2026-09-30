@@ -54,6 +54,9 @@ The additions are confined to presentation:
    Sprite and label hit rectangles resolve to canonical agent/equipment coordinates. Pan, zoom,
    camera focus, minimap selection and station expansion continue to use the existing world.
    Sprite alpha bounds and wall outlines are cached; the frame loop does no pixel readback.
+   Complete views register through `StationPresentation.registerView(themeId, renderer)` with
+   `draw`, `clientToWorld`, `worldToCanvas` and `reset` methods. Future perspective/3D renderers
+   use the same hooks; core world code contains no OSRS-specific view selection.
 
 Only small hooks are added at the existing world/base, prop and body draw boundaries. Native
 pathfinding, entity selection, conveyors, ownership, task progress, permissions and save logic remain

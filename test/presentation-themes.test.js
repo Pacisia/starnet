@@ -74,4 +74,11 @@ assert.equal(diagonal.loops.reduce((sum,loop)=>sum+area(loop),0),288,'small room
 const hole=Perspective.outline({tileSize:12,floor:[{x:0,y:0,w:36,h:12},{x:0,y:12,w:12,h:12},{x:24,y:12,w:12,h:12},{x:0,y:24,w:36,h:12}]});
 assert.equal(hole.loops.length,2,'courtyard/void holes keep a separate clipping boundary');
 assert.deepEqual(Array.from(hole.loops,area).sort((a,b)=>a-b),[144,1296]);
+assert.equal(Art.registerView('original',{}),false,'the native complete view remains protected');
+const frame=Object.freeze({snapshot:Object.freeze({fixture:true})});
+Art.registerView('holographic',{draw:(_ctx,_canvas,value)=>value,clientToWorld:()=>({x:12,y:24}),worldToCanvas:()=>({x:30,y:40})});
+Themes.set('holographic',{persist:false});
+assert.equal(Art.hasWorldRenderer(),true);assert.equal(Art.drawWorld(null,null,frame),frame,'complete views consume the read-only presentation frame');
+assert.deepEqual(Art.clientToWorld({}),{x:12,y:24});assert.deepEqual(Art.worldToCanvas(1,2),{x:30,y:40});
+Themes.set('original',{persist:false});assert.equal(Art.hasWorldRenderer(),false);assert.equal(Art.drawWorld(null,null,frame),null);assert.equal(Art.clientToWorld({}),null);
 console.log('presentation-themes: storage isolation, roles, native fallback, immutable inputs and reduced-motion rendering passed');
