@@ -3788,8 +3788,10 @@ const accountRouter = Accounts.makeAccountRouter({
 // runs on its pinned account and only borrows the other one while its own is resting after a usage limit.
 const ACCOUNT_PINS_FILE = path.join(WORKSPACES, 'accounts.pins.json');
 let accountPins = {};
-try { const raw = loadResilient(ACCOUNT_PINS_FILE, 'account-pins'); if (raw && typeof raw === 'object' && raw.pins) accountPins = raw.pins; } catch (_) {}
-function saveAccountPins() { try { saveResilient(ACCOUNT_PINS_FILE, { version: 1, pins: accountPins }); try { accountPinsMtime = fs.statSync(ACCOUNT_PINS_FILE).mtimeMs; } catch (_) {} return true; } catch (e) { console.warn('[accounts] pins not saved:', (e && e.message) || e); return false; } }
+// accountFailover: false = a pinned agent never borrows the other account; while its own rests, it rests too.
+let accountFailover = true;
+try { const raw = loadResilient(ACCOUNT_PINS_FILE, 'account-pins'); if (raw && typeof raw === 'object' && raw.pins) accountPins = raw.pins; if (raw && raw.failover === false) accountFailover = false; } catch (_) {}
+function saveAccountPins() { try { saveResilient(ACCOUNT_PINS_FILE, { version: 1, failover: accountFailover, pins: accountPins }); try { accountPinsMtime = fs.statSync(ACCOUNT_PINS_FILE).mtimeMs; } catch (_) {} return true; } catch (e) { console.warn('[accounts] pins not saved:', (e && e.message) || e); return false; } }
 // The lead agent (or you) can also edit accounts.pins.json directly; it is re-read whenever the file changes.
 let accountPinsMtime = 0;
 function reloadAccountPinsIfChanged() {
@@ -3798,11 +3800,20 @@ function reloadAccountPinsIfChanged() {
     if (m === accountPinsMtime) return;
     accountPinsMtime = m;
     const raw = JSON.parse(fs.readFileSync(ACCOUNT_PINS_FILE, 'utf8'));
+    accountFailover = !(raw && raw.failover === false);
     const src = raw && typeof raw === 'object' ? (raw.pins && typeof raw.pins === 'object' ? raw.pins : raw) : {};
     const next = {};
-    for (const [id, v] of Object.entries(src)) { const x = String(v || '').toUpperCase(); if (/^[A-Za-z0-9_-]{1,40}$/.test(id) && (x === 'A' || x === 'B')) next[id] = x; }
+    for (const [id, v] of Object.entries(src)) { if (id === 'failover' || id === 'version') continue; const x = String(v || '').toUpperCase(); if (/^[A-Za-z0-9_-]{1,40}$/.test(id) && (x === 'A' || x === 'B')) next[id] = x; }
     accountPins = next;
   } catch (_) { /* missing or mid-write: keep the last good pins */ }
+}
+function strictPinFor(agentId) { return { strict: !accountFailover && !!pinnedAccountFor(agentId) }; }
+function restingPinMessage(provider, agentId, acct) {
+  if (accountFailover || !pinnedAccountFor(agentId)) return '';
+  const until = accountRouter.coolingUntil(provider, acct);
+  if (!until) return '';
+  return (provider === 'codex' ? 'ChatGPT' : 'Claude') + ' account ' + acct + ' is resting after a usage limit until '
+    + new Date(until).toISOString() + '. Auto-failover is OFF, so this agent rests instead of moving to the other account.';
 }
 function pinnedAccountFor(agentId) {
   reloadAccountPinsIfChanged();
@@ -9630,6 +9641,8 @@ const ROUTES = [
   { m: 'POST', exact: '/api/auth/codex-b/logout', h: handleCodexBLogout },
   { m: 'GET', qsplit: '/api/accounts', h: handleAccountsOverview },   // qsplit: allows ?refresh=1
   { m: 'POST', exact: '/api/accounts/pins', h: handleAccountPins },
+  { m: 'POST', exact: '/api/lineup/log', h: async (req, res) => { let t=''; try { t = String(JSON.parse(await readBody(req, 1 << 14)).line || '').slice(0, 1000); } catch (_) {} try { fs.appendFileSync(path.join(os.homedir(), 'starnet-lineup.log'), t + '\n'); } catch (_) {} res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{"ok":true}'); } },   // Pacisia: line-up loop log file
+  { m: 'GET', exact: '/api/lineup', h: (req, res) => { require('./lineup-sync.js').fetchLineup().then(o => { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(o)); }).catch(e => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: false, error: String((e && e.message) || e) })); }); } },   // Pacisia: Airtable line-up for the window's auto-summon loop
   { m: 'GET', exact: '/api/connectors/catalog', h: handleConnectorCatalog },
   { m: 'POST', exact: '/api/connectors/oauth/start', h: handleConnectorOauthStart },
   { m: 'POST', exact: '/api/connectors/oauth/device/poll', h: handleConnectorDevicePoll },
@@ -16583,7 +16596,14 @@ async function runOnceCore(o) {
   // downstream of the provider seam (loop, cost, gauge) is identical to the OpenRouter path.
   let provider;
   // Dylan's fork: which ChatGPT account (A/B) this run uses — sticky per agent, moves on a usage-limit hit.
-  const codexAcct = usingCodex ? accountRouter.pick('codex', agentId, codexAccountsAvailable(), pinnedAccountFor(agentId)) : '';
+  const codexAcct = usingCodex ? accountRouter.pick('codex', agentId, codexAccountsAvailable(), pinnedAccountFor(agentId), strictPinFor(agentId)) : '';
+  const codexRest = usingCodex ? restingPinMessage('codex', agentId, codexAcct) : '';
+  if (codexRest) {
+    emit('agent.run.start', { agentId, runId, trigger: trigger, model });
+    emit('agent.run.error', { agentId, runId, transient: true, message: codexRest });
+    emit('agent.run.end', { agentId, runId, reason: 'error', turns: 0, usd: 0 });
+    return;
+  }
   if (usingCodex) {
     try { AirtableSync.observe('agent.account', { agentId, runId, provider: 'codex', account: codexAcct }); } catch (_) {}
     const fns = codexFnsFor(codexAcct);
@@ -16697,7 +16717,7 @@ async function runOnceCore(o) {
     if (fbManaged !== managedRun) continue;
     let fbProvider;
     if (providerUsesCodex(fbProviderId)) {
-      const fbFns = codexFnsFor(usingCodex ? codexAcct : accountRouter.pick('codex', agentId, codexAccountsAvailable(), pinnedAccountFor(agentId)));
+      const fbFns = codexFnsFor(usingCodex ? codexAcct : accountRouter.pick('codex', agentId, codexAccountsAvailable(), pinnedAccountFor(agentId), strictPinFor(agentId)));
       fbProvider = selectProvider({ provider: fbProviderId, fetch: globalThis.fetch, tokenProvider: fbFns.ensure, renewToken: fbFns.renew, baseUrl: fbBaseUrl, reasoningEffort });
     } else if (providerUsesDeviceOAuth(fbProviderId)) {
       fbProvider = selectProvider({ provider: fbProviderId, fetch: globalThis.fetch, tokenProvider: () => ensureOAuthAccessToken(fbProviderId), headersProvider: () => oauthInferenceHeaders(fbProviderId), baseUrl: fbBaseUrl, reasoningEffort });
@@ -17761,8 +17781,15 @@ async function runOnceCore(o) {
         try { fs.mkdirSync(ccCwd, { recursive: true }); } catch (e) { failNote('claude-code.cwd', e); }
       }
       // Dylan's fork: which Claude login (A = default ~/.claude, B = CLAUDE_B_DIR) this run uses.
-      const ccAcct = accountRouter.pick('claude-code', agentId, claudeAccountsAvailable(), pinnedAccountFor(agentId));
+      const ccAcct = accountRouter.pick('claude-code', agentId, claudeAccountsAvailable(), pinnedAccountFor(agentId), strictPinFor(agentId));
       try { AirtableSync.observe('agent.account', { agentId, runId, provider: 'claude-code', account: ccAcct }); } catch (_) {}
+      const ccRest = restingPinMessage('claude-code', agentId, ccAcct);
+      if (ccRest) {
+        loopEmit('agent.run.start', { agentId, runId, model, trigger });
+        loopEmit('agent.run.error', { agentId, runId, transient: true, message: ccRest });
+        loopEmit('agent.run.end', { agentId, runId, reason: 'error', turns: 0, usd: 0 });
+        result = { reason: 'error', turns: 0, usd: 0, messages: msgs };
+      } else
       result = await ClaudeCodeEngine.runClaudeCodeEngine({
         configDir: claudeConfigDirFor(ccAcct),
         onRateLimit: (info) => recordClaudeUsage(ccAcct, info),
@@ -20162,7 +20189,9 @@ async function handleAccountsOverview(req, res) {
   try { ccA = await ClaudeCodeEngine.authStatus({ force }); } catch (_) {}
   const claudeAvail = claudeAccountsAvailable();
   if (claudeAvail.indexOf('B') >= 0) { try { ccB = await ClaudeCodeEngine.authStatus({ force, configDir: CLAUDE_B_DIR }); } catch (_) {} }
+  reloadAccountPinsIfChanged();
   const body = {
+    failover: accountFailover,
     claude: {
       A: { connected: !!(ccA && ccA.connected) },
       B: { connected: !!(ccB && ccB.connected), setUp: claudeAvail.indexOf('B') >= 0, signInCommand: 'CLAUDE_CONFIG_DIR=' + CLAUDE_B_DIR + ' claude' },

@@ -52,8 +52,14 @@ function makeAccountRouter(opts) {
 
   /* available = account ids currently signed in, e.g. ['A','B'] or ['A'].
      preferred = an account the agent's profile pins (optional). Returns the account id to use now. */
-  function pick(provider, agentId, available, preferred) {
+  function pick(provider, agentId, available, preferred, pickOpts) {
     const accts = (available || []).filter(Boolean);
+    // FAILOVER OFF (pins file "failover": false): a pinned agent stays on its pinned account even while that
+    // account rests. The caller checks coolingUntil() and rests the agent instead of moving it.
+    if (pickOpts && pickOpts.strict && preferred && accts.indexOf(preferred) >= 0) {
+      sticky.set(k(provider, agentId), preferred);
+      return preferred;
+    }
     if (!accts.length) return 'A';
     if (accts.length === 1) { sticky.set(k(provider, agentId), accts[0]); return accts[0]; }
     const key = k(provider, agentId);

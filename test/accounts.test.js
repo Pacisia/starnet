@@ -62,3 +62,15 @@ console.log('accounts.test.js claude config-dir ok');
   assert.strictEqual(acct.Key, 'ChatGPT B'); assert.strictEqual(acct['Short Window Used'], 0.42); assert.strictEqual(acct['Tokens Today'], 120); assert.strictEqual(acct['Runs Today'], 1);
   console.log('accounts.test.js airtable rows ok');
 })().catch(e => { console.error(e); process.exit(1); });
+
+// strict pin (failover off): pinned agent stays on its resting account, no switch
+{
+  const rs = makeAccountRouter({ clock: { now: () => 1000 } });
+  assert.strictEqual(rs.pick('claude-code', 'rev', ['A', 'B'], 'B', { strict: true }), 'B');
+  rs.penalize('claude-code', 'B', 'retry after 600 seconds');
+  assert.strictEqual(rs.pick('claude-code', 'rev', ['A', 'B'], 'B', { strict: true }), 'B');
+  assert.ok(rs.coolingUntil('claude-code', 'B') > 1000);
+  assert.strictEqual(rs.recentSwitches().length, 0);
+  // without strict the same agent borrows A
+  assert.strictEqual(rs.pick('claude-code', 'rev', ['A', 'B'], 'B'), 'A');
+}

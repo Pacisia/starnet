@@ -1450,6 +1450,174 @@ const App = (() => {
     return { agentId: a.id, desk: deskWhere };
   }
 
+  // ---- LINE-UP LOOP: Airtable Agent Profiles (edited from the Console artifact) -> StarNet crew --------------
+  // Every 60s: GET /api/lineup; for each Approved profile keep Slots agents named "<PROFILE>" / "<PROFILE> 2"..;
+  // summon missing ones (same summonAgent the Recruitment Bay uses), pin Claude/ChatGPT account A/B, clone the
+  // worker-loop routine from an existing agent of the same profile; pause routines when Slots drop or the profile
+  // is Paused/Retired; remove loop-created agents when the profile is deleted or shrinks. Only touches agents it tagged.
+  const lineupLog = [];
+  let lineupBusy = false, lineupTimer = null, lineupLastPins = '';
+  function lineupNote(m) { const s = new Date().toISOString() + ' ' + m; lineupLog.push(s); if (lineupLog.length > 200) lineupLog.shift(); try { console.log('[lineup]', m); } catch (_) {} try { Harness.api.post('/api/lineup/log', { line: s }).catch(() => {}); } catch (_) {} }
+  function lineupProvider(model) {
+    const m = String(model || '').toLowerCase();
+    if (/^claude|opus|sonnet|haiku/.test(m)) return 'claude-code';
+    if (/^gpt|codex|o\d/.test(m)) return 'codex';
+    if (/^mimo|xiaomi/.test(m)) return 'mimo';
+    if (/^grok/.test(m)) return 'grok';
+    if (/^gemini/.test(m)) return 'gemini';
+    if (/^deepseek/.test(m)) return 'deepseek';
+    if (/^kimi|^moonshot/.test(m)) return 'kimi';
+    if (/^mistral|^codestral|^ministral/.test(m)) return 'mistral';
+    if (/^sonar/.test(m)) return 'perplexity';
+    if (m.indexOf('/') > 0) return 'openrouter';
+    for (const a of liveAgents()) if (a.model === model && a.provider) return a.provider;
+    return null;
+  }
+  const RB = '/Users/corbinchapman/Developer/PacisiaInfrastructure/n8n/rulebooks/';
+  const LINEUP_LAUNCHER = "You are Pacisia {ROLE} {NN} (agent {NAME}, worker key {KEY}, model {MODEL}). Never open anything in n8n/secrets and never print tokens. Set up: PAC=\"node /Users/corbinchapman/Developer/PacisiaInfrastructure/n8n/mimo-producer/bin/pac.mjs\" and export PAC_WORKER={KEY}. {QCHECK}Step 1: read the whole file " + RB + "ROLE_{ROLE}.md and follow it for this whole run. Step 2: read " + RB + "MODEL_{MODELFILE}.md; if that file does not exist, read " + RB + "MODEL_generic.md instead. OVERLAP CHECK first: $PAC table \"Tasks\" \"FIND('{LEASEPFX}-{NN}/',{Lease Owner})\" 5; if a returned task has a Lease Expires in the future, another run of you is working: finish at once. Then do the job in the role file non-stop until there is nothing left to take, stopping after 2 failures in a row. If nothing is available, finish quietly; this routine fires again every 5 minutes.";
+  function lineupRole(p) { const r = String(p.role || p.name || '').toLowerCase(); return /pre[- ]?review/.test(r) ? 'prereviewer' : /gate/.test(r) ? 'gate' : /review/.test(r) ? 'reviewer' : /produc|worker/.test(r) ? 'producer' : ''; }
+  function lineupQCheck(role) { const st = role === 'reviewer' ? 'CLAUDE_REVIEW' : role === 'gate' ? 'CHATGPT_REVIEW' : ''; return st ? 'QUEUE CHECK (before reading any other file): run $PAC review-next ' + st + ' 1. If it reports 0 available, reply \"queue empty\" and stop at once; do not read any rulebook. ' : ''; }
+  function lineupDefaultNote(p) { return lineupRole(p) ? LINEUP_LAUNCHER : ''; }
+  function lineupFill(text, p, a, base) {
+    const role = lineupRole(p);
+    const key = String(p.worker || base).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const mf = String(p.model || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const pfx = role === 'reviewer' ? 'claude-reviewer' : role === 'prereviewer' ? 'prereviewer' : key;
+    const nn = String(a.lineup.n || 1).padStart(2, '0');
+    return String(text).split('{NN}').join(nn).split('{NAME}').join(a.name).split('{KEY}').join(key).split('{ROLE}').join(role || 'producer').split('{MODEL}').join(String(p.model || '')).split('{MODELFILE}').join(mf).split('{LEASEPFX}').join(pfx).split('{QCHECK}').join(lineupQCheck(role));
+  }
+  const lineupProvCache = {};
+  async function lineupProviderResolve(model) {
+    const m = String(model || '').trim(); if (!m) return null;
+    if (lineupProvCache[m]) return lineupProvCache[m];
+    let pv = lineupProvider(m);
+    if (!pv || !/^(claude-code|codex|mimo|grok)$/.test(pv)) {
+      // ask each provider's own model catalog which one lists this id
+      const ids = ['claude-code', 'codex', 'grok', 'kimi', 'mimo', 'openrouter', 'openai', 'anthropic', 'gemini', 'xai', 'groq', 'mistral', 'deepseek', 'together', 'fireworks', 'perplexity', 'cerebras'];
+      for (const id of ids) {
+        try { const r = await Harness.apiFetch('/api/models/' + encodeURIComponent(id), { cache: 'no-store' }); if (!r.ok) continue; const t = await r.text(); if (t.indexOf('"' + m + '"') >= 0) { pv = id; break; } } catch (_) {}
+      }
+    }
+    if (pv) lineupProvCache[m] = pv; else lineupNote('could not work out which provider runs model ' + m + '; leaving the hero provider - pick another model in the Console or tell Claude');
+    return pv || null;
+  }
+  function lineupAgentName(profileName, n) { const suf = n > 1 ? ' ' + n : ''; return (String(profileName).toUpperCase().replace(/\s+/g, ' ').trim().slice(0, 18 - suf.length).trim() + suf); }
+  async function lineupTick() {
+    if (lineupBusy || !agent) return;
+    lineupBusy = true;
+    try {
+      const r = await Harness.apiFetch('/api/lineup');
+      const L = await r.json();
+      if (!L || !L.ok) { lineupNote('lineup unavailable: ' + ((L && L.error) || r.status)); return; }
+      const profiles = L.profiles || [];
+      const known = new Set(profiles.map(p => lineupAgentName(p.name, 1)));
+      const provMap = {}; for (const p of profiles) if (p.model && !(p.model in provMap)) provMap[p.model] = await lineupProviderResolve(p.model);
+      const cronRes = await Harness.api.get('/api/cron');
+      const jobs = (cronRes && cronRes.jobs) || [];
+      const jobsFor = id => jobs.filter(j => j && j.agentId === id);
+      const pins = {};
+      let pinsChanged = false;
+      // 1) profiles -> agents
+      for (const p of profiles) {
+        const base = lineupAgentName(p.name, 1);
+        const want = (p.status === 'Approved') ? Math.max(0, parseInt(p.slots, 10) || 0) : 0;
+        for (let n = 1; n <= Math.max(want, 1); n++) {
+          const nm = lineupAgentName(p.name, n);
+          const ex = liveAgents().find(a => !a.lineup && String(a.name || '').toUpperCase() === nm);
+          if (ex && n <= Math.max(want, 1)) { ex.lineup = { profile: base, n, worker: p.worker || '', rec: p.rec, adopted: true }; lineupNote('adopted existing ' + ex.name); try { persist(); } catch (_) {} }
+        }
+        const mine = liveAgents().filter(a => a.lineup && a.lineup.profile === base).sort((x, y) => (x.lineup.n || 1) - (y.lineup.n || 1));
+        // create missing slots
+        for (let n = 1; n <= want; n++) {
+          if (mine.some(a => (a.lineup.n || 1) === n)) continue;
+          const provider = provMap[p.model] || lineupProvider(p.model);
+          const spec = { agentName: lineupAgentName(p.name, n), name: p.name, purpose: p.role || ('Line-up agent: ' + p.name),
+            modelPin: { model: p.model || undefined, provider: provider || undefined, effort: (p.effort || '').toLowerCase() || undefined } };
+          let a = null;
+          try { a = summonAgent(spec, { activate: false, desk: true }); } catch (e) { lineupNote('summon failed ' + spec.agentName + ': ' + e.message); }
+          if (!a) continue;
+          a.lineup = { profile: base, n, worker: p.worker || '', rec: p.rec };
+          try { setAgentApproval(a.id, 'full'); await setAgentExecutionProfile(a.id, 'this-computer'); } catch (_) {}
+          mine.push(a);
+          lineupNote('summoned ' + a.name + ' (' + (p.model || 'default') + ')');
+          try { persist(); } catch (_) {}
+        }
+        // heal provider: agents made before the provider mapping existed inherited the hero's provider
+        { const want_p = provMap[p.model] || lineupProvider(p.model);
+          if (want_p) for (const a of mine) {
+            if (a.provider !== want_p || (p.model && a.model !== p.model)) {
+              try { setAgentModelPin(a.id, p.model || a.model, want_p, (p.effort || '').toLowerCase() || a.reasoningEffort || ''); lineupNote('fixed provider for ' + a.name + ' -> ' + want_p); } catch (e) { lineupNote('provider fix failed ' + a.name + ': ' + e.message); }
+            }
+            for (const j of jobsFor(a.id)) {
+              if (!p.note && (lineupRole(p) === 'reviewer' || lineupRole(p) === 'gate') && /^Pacisia worker loop/i.test(String(j.name || '')) && String(j.prompt || '').indexOf('QUEUE CHECK') < 0) {
+                const r3 = await Harness.api.post('/api/cron/update', { id: j.id, patch: { prompt: lineupFill(lineupDefaultNote(p), p, a, base) } }).catch(() => null);
+                lineupNote('queue check added to routine for ' + a.name + ': ' + (r3 && r3.ok && !(r3.j && r3.j.error) ? 'ok' : 'failed ' + JSON.stringify(r3 && r3.j || {}).slice(0, 120)));
+              }
+              if (j.provider !== want_p || (p.model && j.model !== p.model)) {
+                const r2 = await Harness.api.post('/api/cron/update', { id: j.id, patch: { provider: want_p, model: p.model || undefined } }).catch(() => null);
+                lineupNote('routine provider for ' + a.name + ' -> ' + want_p + ': ' + (r2 && r2.ok ? 'ok' : 'failed ' + JSON.stringify(r2 && r2.j || {}).slice(0, 120)));
+              }
+            }
+          } }
+        // account pin
+        const acc = /\b([AB])\s*$/i.exec(p.account || '');
+        for (const a of mine) if (acc) { pins[a.id] = acc[1].toUpperCase(); pinsChanged = true; }
+        // routines: clone from a sibling/template if a slot has none
+        const noteText = p.note || lineupDefaultNote(p); const noteOK = !!(noteText && /\{NN\}|producer|worker|claim|review/i.test(noteText));
+        const tpl = noteOK ? null : (mine.map(a => jobsFor(a.id)[0]).find(Boolean)) ||
+          jobs.find(j => j && j.agentId && /^Pacisia worker loop/i.test(j.name || '') && (function(){ const w = /GATE|REVIEW|PRODUCER/.exec(String(p.name).toUpperCase()); if (!w) return false; const ag = liveAgents().find(a => a.id === j.agentId) || {}; const hay = (String(ag.name || '') + ' ' + String(j.name || '') + ' ' + String(j.prompt || '').slice(0, 600)).toUpperCase(); return new RegExp(w[0]).test(hay); }()));
+        for (let i = 0; i < mine.length; i++) {
+          const a = mine[i];
+          const active = (p.status === 'Approved') && (a.lineup.n || 1) <= want;
+          const js = jobsFor(a.id);
+          if (active && !js.length && !tpl && !noteOK && !a.lineup.warned) { a.lineup.warned = true; lineupNote('no routine template for ' + a.name + '; routines seen: ' + jobs.map(x => (x.name || '?') + '@' + x.agentId).join(' | ').slice(0, 600)); }
+          if (active && !js.length && !tpl && noteOK) {
+            try {
+              const nn = String(a.lineup.n || 1).padStart(2, '0');
+              const body = { name: 'Pacisia worker loop: ' + a.name + ' ' + String(a.id).slice(-6), prompt: lineupFill(noteText, p, a, base), schedule: 'every 5m',
+                agentId: a.id, provider: a.provider || undefined, model: a.model || undefined, enabled: true };
+              const rr = await Harness.api.post('/api/cron', body);
+              { const jj = rr && rr.j || {}; lineupNote('routine from profile note for ' + a.name + ': ' + (rr.ok && jj.ok && jj.job && !jj.duplicate ? 'created ' + jj.job.id : jj.duplicate ? 'already exists ' + (jj.job && jj.job.id) : jj.declined ? 'DECLINED by mint ledger (' + (jj.message || '') + ')' : 'refused: ' + (jj.error || JSON.stringify(jj).slice(0, 200)))); }
+            } catch (e) { lineupNote('routine failed ' + a.name + ': ' + e.message); }
+          }
+          if (active && !js.length && tpl) {
+            try {
+              const body = { name: 'Pacisia worker loop: ' + a.id, prompt: tpl.prompt, schedule: (tpl.schedule && tpl.schedule.kind === 'interval' && tpl.schedule.minutes ? 'every ' + tpl.schedule.minutes + 'm' : 'every 5m'),
+                agentId: a.id, provider: tpl.provider, model: tpl.model, deliver: tpl.deliver, workdir: tpl.workdir, enabled: true };
+              const rr = await Harness.api.post('/api/cron', body);
+              lineupNote('routine for ' + a.name + ': ' + (rr.ok ? 'created' : (rr.j && rr.j.error) || 'refused'));
+            } catch (e) { lineupNote('routine failed ' + a.name + ': ' + e.message); }
+          }
+          for (const j of js) {
+            if (active && j.enabled === false) { await Harness.api.post('/api/cron/update', { id: j.id, patch: { enabled: true } }).catch(() => {}); lineupNote('resumed ' + a.name); }
+            if (!active && j.enabled !== false) { await Harness.api.post('/api/cron/update', { id: j.id, patch: { enabled: false } }).catch(() => {}); lineupNote('paused ' + a.name); }
+          }
+        }
+        // slots dropped below existing loop-created agents beyond want: routines already paused above
+      }
+      // 2) loop-created agents whose profile no longer exists -> remove
+      for (const a of liveAgents().filter(x => x.lineup && !known.has(x.lineup.profile))) {
+        for (const j of jobsFor(a.id)) await Harness.api.post('/api/cron/remove', { id: j.id }).catch(() => {});
+        let okDel = false; try { okDel = await deleteAgent(a.id); } catch (_) {}
+        lineupNote(okDel ? ('removed ' + a.name) : ('could not remove ' + a.name + ' (busy, active run, or last agent) - will retry'));
+      }
+      // 3) account pins (merge with current server pins so manual pins on other agents are kept)
+      if (pinsChanged) {
+        try {
+          const key = JSON.stringify(pins);
+          if (key !== lineupLastPins) { await Harness.api.post('/api/accounts/pins', { pins }); lineupLastPins = key; lineupNote('account pins set'); }
+        } catch (e) { lineupNote('pins failed: ' + e.message); }
+      }
+    } catch (e) { lineupNote('tick error: ' + (e && e.message)); }
+    finally { lineupBusy = false; }
+  }
+  function startLineupLoop() {
+    if (lineupTimer) return;
+    lineupTimer = setInterval(lineupTick, 60000);
+    setTimeout(lineupTick, 8000);
+    window.__lineupLog = lineupLog; window.__lineupTick = lineupTick;
+  }
+
   let unsubscribeStationSave = null;
   let stationSaveQueued = false;
   function watchStationSave() {
@@ -5211,6 +5379,7 @@ const App = (() => {
     showSplash();
   }
   init();
+  startLineupLoop();
 
   // crewCount: the live crew size (hero + summoned minds) — read by the quest log's station arc.
   // agentName/heroId (G1b): the station-quest generator names the acting agent from the LIVE roster
