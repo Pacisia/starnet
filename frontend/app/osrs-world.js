@@ -68,9 +68,14 @@ const OSRSWorld = (() => {
       if(!tiles.has(x+','+(y+T)))raw.push([{x:x+T,y:y+T},{x,y:y+T}]);
       if(!tiles.has((x+T)+','+y))raw.push([{x:x+T,y},{x:x+T,y:y+T}]);
     }
-    const keyed=new Map(raw.map(edge=>[edge[0].x+','+edge[0].y,edge]));
-    while(keyed.size){const first=keyed.values().next().value,start=first[0],points=[];let edge=first;
-      while(edge){points.push(edge[0]);keyed.delete(edge[0].x+','+edge[0].y);const end=edge[1];if(end.x===start.x&&end.y===start.y)break;edge=keyed.get(end.x+','+end.y);}
+    const keyed=new Map();for(const edge of raw){const key=edge[0].x+','+edge[0].y;if(!keyed.has(key))keyed.set(key,[]);keyed.get(key).push(edge);}
+    while(keyed.size){const first=keyed.values().next().value[0],start=first[0],points=[];let edge=first;
+      while(edge){points.push(edge[0]);const key=edge[0].x+','+edge[0].y,bucket=keyed.get(key);bucket.splice(bucket.indexOf(edge),1);if(!bucket.length)keyed.delete(key);
+        const end=edge[1];if(end.x===start.x&&end.y===start.y)break;const next=keyed.get(end.x+','+end.y)||[];
+        const dx=end.x-edge[0].x,dy=end.y-edge[0].y;
+        // At diagonal contacts each loop keeps its own right turn, preserving separate rooms/holes.
+        edge=next.find(e=>dx*(e[1].y-e[0].y)-dy*(e[1].x-e[0].x)>0)||next[0];
+      }
       // Join wall blocks across collinear tile edges, then bevel short staircase corners.
       let merged=points.filter((p,i)=>{const a=points[(i+points.length-1)%points.length],b=points[(i+1)%points.length];return (p.x-a.x)*(b.y-p.y)!==(p.y-a.y)*(b.x-p.x);});
       if(merged.length>3){const long=merged.findIndex((p,i)=>{const q=merged[(i+1)%merged.length];return Math.hypot(q.x-p.x,q.y-p.y)>T*1.1;});if(long>0)merged=merged.slice(long).concat(merged.slice(0,long));
@@ -221,6 +226,6 @@ const OSRSWorld = (() => {
   function clientHit(e,canvas) {if(!active()||!view)return null;const p=pointFromClient(e,canvas);return hitPoint(p.x,p.y);}
   function reset(){view=null;baseline=null;hitRects.length=0;}
   return {active,draw,reset,bind:fn=>{lookup=fn||(()=>null);},clientToWorld,worldToCanvas,clientHit,makeView,project,unproject,propIndex,
-    ready:()=>!!(rects.npc&&rects.props&&rects.travellers),hitRects:()=>hitRects.map(r=>({...r})),bounds};
+    ready:()=>!!(rects.npc&&rects.props&&rects.travellers),hitRects:()=>hitRects.map(r=>({...r})),bounds,outline:outerEdges};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=OSRSWorld;
