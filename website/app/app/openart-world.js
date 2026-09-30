@@ -23,29 +23,50 @@ const OpenArtWorld = (() => {
   }
   function face(v,a,b,low,high){return[project(v,a.x,a.y,high),project(v,b.x,b.y,high),project(v,b.x,b.y,low),project(v,a.x,a.y,low)];}
   function wall(g,v,a,b,near,art){
-    const H=near?5:31,low=near?-4:0,m=art.model,len=Math.hypot(b.x-a.x,b.y-a.y),n=Math.max(1,Math.ceil(len/24));
+    const H=near?5:31,low=near?-4:0,m=art.model,len=Math.hypot(b.x-a.x,b.y-a.y),n=Math.max(1,Math.ceil(len/(near?36:48)));
     const dx=(b.y-a.y)/(len||1)*6.5,dy=-(b.x-a.x)/(len||1)*6.5;
     for(let i=0;i<n;i++){
       const p={x:a.x+(b.x-a.x)*i/n,y:a.y+(b.y-a.y)*i/n},q={x:a.x+(b.x-a.x)*(i+1)/n,y:a.y+(b.y-a.y)*(i+1)/n};
       const panel=face(v,p,q,low,H),cap=[project(v,p.x,p.y,H),project(v,q.x,q.y,H),project(v,q.x+dx,q.y+dy,H),project(v,p.x+dx,p.y+dy,H)];
       polygon(g,panel,m.palette[1],'#06080b',.75);imageQuad(g,art.materials.wall,panel);
+      // Broad hull plates and a dark lower sill read as one built room, rather than a
+      // row of repeated sprite tiles. Their geometry follows every real outer/void edge.
+      polygon(g,face(v,p,q,low,near?low+1.3:2.5),'#05080c55');
       polygon(g,cap,m.palette[2],'#151820',.85);imageQuad(g,art.materials.cap,cap);
       const pa=project(v,p.x+dx,p.y+dy,H),pb=project(v,q.x+dx,q.y+dy,H);
       g.strokeStyle=m.palette[2]+'99';g.lineWidth=.8;g.beginPath();g.moveTo(pa.x,pa.y);g.lineTo(pb.x,pb.y);g.stroke();
+      if(!near){
+        const fraction=1.2/(len/n),r={x:p.x+(q.x-p.x)*fraction,y:p.y+(q.y-p.y)*fraction};
+        polygon(g,face(v,p,r,0,H),m.palette[1]+'bb','#080b0e55',.6);
+        const from={x:p.x+(q.x-p.x)*.31,y:p.y+(q.y-p.y)*.31},to={x:p.x+(q.x-p.x)*.69,y:p.y+(q.y-p.y)*.69};
+        // Fixed wall fittings are part of the hull, not capability or task markers.
+        polygon(g,face(v,from,to,19.5,21),m.palette[1],'#070b1055',.7);
+        polygon(g,face(v,from,to,19.9,20.6),m.palette[2]+'aa');
+      }
     }
   }
   function drawTerrain(g,v,s,edges,art){
     const key=[current(),v.width,v.height,v.scale,v.center.x,v.center.y].join(':');
     if(!terrain||terrain.key!==key||terrain.layout!==s.layout){
-      const c=document.createElement('canvas');c.width=v.width;c.height=v.height;const t=c.getContext('2d'),T=s.layout.tileSize*3,bounds=OSRSWorld.bounds(s.layout);
+      const c=document.createElement('canvas');c.width=v.width;c.height=v.height;const t=c.getContext('2d'),T=s.layout.tileSize*4,bounds=OSRSWorld.bounds(s.layout);
       t.save();t.beginPath();for(const loop of edges.loops){loop.forEach((p,i)=>{const q=project(v,p.x,p.y);i?t.lineTo(q.x,q.y):t.moveTo(q.x,q.y);});t.closePath();}t.clip('evenodd');
       t.fillStyle=art.model.palette[4];t.fillRect(0,0,c.width,c.height);
       for(let y=bounds.y;y<bounds.y+bounds.h;y+=T)for(let x=bounds.x;x<bounds.x+bounds.w;x+=T){
         const points=[[x,y],[x+T,y],[x+T,y+T],[x,y+T]].map(([a,b])=>project(v,a,b));
         imageQuad(t,art.materials.floor,points);
-        polygon(t,points,null,'#151d281a',.5);
+        polygon(t,points,null,'#10151b26',.65);
       }
-      for(const [a,b]of edges.far){const p=project(v,a.x,a.y),q=project(v,b.x,b.y);t.strokeStyle='#03070d45';t.lineWidth=7*v.scale;t.beginPath();t.moveTo(p.x,p.y);t.lineTo(q.x,q.y);t.stroke();}
+      // A subtle room-wide light falloff keeps sampled floor plates coherent. The
+      // floor clip retains courtyard holes and disconnected, newly built rooms.
+      for(let row=0;row<8;row++){
+        const y=bounds.y+bounds.h*row/8,alpha=Math.round(3+row*.75).toString(16).padStart(2,'0');
+        quad(t,v,bounds.x,y,bounds.w,bounds.h/8,0,'#020609'+alpha);
+      }
+      for(const [a,b]of edges.far){const p=project(v,a.x,a.y),q=project(v,b.x,b.y);
+        for(const [width,color]of [[9,'#03070d12'],[5,'#03070d24'],[2,'#03070d3c']]){
+          t.strokeStyle=color;t.lineWidth=width*v.scale;t.beginPath();t.moveTo(p.x,p.y);t.lineTo(q.x,q.y);t.stroke();
+        }
+      }
       t.restore();edges.far.forEach(([a,b])=>wall(t,v,a,b,false,art));
       // The viewport is fitted to a real rear wall; additional rooms keep their own outline.
       const rear=edges.far.filter(([a,b])=>Math.abs(a.y-b.y)<.01).sort((a,b)=>(b[1].x-b[0].x)-(a[1].x-a[0].x))[0];
@@ -58,8 +79,11 @@ const OpenArtWorld = (() => {
           }
         }else{
           const inset=(b.x-a.x)*.10,p={x:a.x+inset,y:a.y},q={x:b.x-inset,y:b.y},window=face(v,p,q,7,29);
-          polygon(t,window,'#050a11',art.model.palette[2],3*v.scale);imageQuad(t,art.materials.window,window);
+          polygon(t,window,'#050a11',art.model.palette[2],2.4*v.scale);imageQuad(t,art.materials.window,window);
           polygon(t,window,null,'#16191d',1.1*v.scale);
+          polygon(t,face(v,p,q,6,7.5),art.model.palette[1],art.model.palette[2]+'77',.65);
+          const inner=[project(v,p.x,p.y,28.4),project(v,q.x,q.y,28.4)];
+          t.strokeStyle='#ffffff3a';t.lineWidth=.65*v.scale;t.beginPath();t.moveTo(inner[0].x,inner[0].y);t.lineTo(inner[1].x,inner[1].y);t.stroke();
         }
       }
       const front=document.createElement('canvas');front.width=v.width;front.height=v.height;const fg=front.getContext('2d');
@@ -79,6 +103,24 @@ const OpenArtWorld = (() => {
     // canonical capability, ownership, footprint and permissions are never rewritten.
     return role==='ranger'?'studio':['dwarf','cook'].includes(role)?'workbench':kind;
   }
+  function drawGrounding(g,v,s,edges){
+    g.save();g.beginPath();for(const loop of edges.loops){loop.forEach((p,i)=>{const q=project(v,p.x,p.y);i?g.lineTo(q.x,q.y):g.moveTo(q.x,q.y);});g.closePath();}g.clip('evenodd');
+    // Shadows use canonical footprints and feet. Draw them before all entities so
+    // one piece of furniture cannot paint its shadow across an already drawn NPC.
+    for(const p of s.equipment){
+      const kind=propKind(p),spread=kind==='plant'?.7:1.5,cast=['cabinet','notebook','portal','dish'].includes(kind)?3.5:2;
+      for(const [pad,color]of [[spread*1.7,'#0000000a'],[spread,'#00000013'],[0,'#00000023']]){
+        quad(g,v,p.x-pad+cast*.4,p.y-pad+cast*.7,p.w+pad*2,p.h+pad*2,.05,color);
+      }
+    }
+    for(const b of s.bodies)if(!b.unplaced){
+      const p=project(v,b.x,b.y),wide=b.lying?8:b.sitting?5.2:4.6;
+      for(const [k,color]of [[1.6,'#00000009'],[1.2,'#00000014'],[.8,'#0000002a']]){
+        g.fillStyle=color;g.beginPath();g.ellipse(p.x+v.scale*.45,p.y+.15*v.scale,wide*v.scale*k,1.5*v.scale*k,0,0,Math.PI*2);g.fill();
+      }
+    }
+    g.restore();
+  }
   function drawProp(g,v,p,art){
     const kind=propSpriteKind(p),image=art.props[kind],foot=project(v,p.x+p.w/2,p.y+p.h*.83);
     let h=(art.model.propHeights[kind]||(kind==='dish'?37:['cabinet','notebook','portal'].includes(kind)?30:kind==='plant'?24:23))*v.scale;
@@ -86,7 +128,7 @@ const OpenArtWorld = (() => {
     if(kind==='table'||kind==='computer'||kind==='studio'||kind==='workbench'){
       w=Math.max(14,p.w)*v.scale*1.28;h=image?w*image.height/image.width:20*v.scale;
     }
-    g.fillStyle='#00000035';g.beginPath();g.ellipse(foot.x+v.scale,foot.y,w*.38,1.9*v.scale,.03,0,Math.PI*2);g.fill();
+    g.fillStyle='#00000025';g.beginPath();g.ellipse(foot.x,foot.y,w*.37,1.6*v.scale,.03,0,Math.PI*2);g.fill();
     const plinth=image&&['computer','studio','table'].includes(kind)&&image.height/image.width<.59?6:0;
     if(plinth){
       const front=face(v,{x:p.x,y:p.y+p.h},{x:p.x+p.w,y:p.y+p.h},0,plinth);
@@ -98,6 +140,8 @@ const OpenArtWorld = (() => {
       if(art.materials.housing)imageQuad(g,art.materials.housing,front);
       polygon(g,front,'#00000040');
       quad(g,v,p.x,p.y,p.w,p.h,plinth,art.model.palette[1],art.model.palette[2]);
+      imageQuad(g,art.materials.cap,[[p.x,p.y],[p.x+p.w,p.y],[p.x+p.w,p.y+p.h],[p.x,p.y+p.h]].map(([x,y])=>project(v,x,y,plinth)));
+      polygon(g,face(v,{x:p.x,y:p.y+p.h},{x:p.x+p.w,y:p.y+p.h},0,1),'#03050877');
       const start=project(v,p.x+p.w*.13,p.y+p.h,plinth*.4),end=project(v,p.x+p.w*.87,p.y+p.h,plinth*.4);
       g.strokeStyle=art.model.palette[2];g.lineWidth=.7;g.beginPath();g.moveTo(start.x,start.y);g.lineTo(end.x,end.y);g.stroke();
     }
@@ -125,7 +169,6 @@ const OpenArtWorld = (() => {
     const record=lookup(b.id)||b,role=StationPresentation.roleFor(record),image=art.npc[role.kind]||art.npc.player,p=project(v,b.x,b.y);
     const size=.94+.10*(b.y-v.b.y)/Math.max(1,v.b.h),fullH=39*v.scale*size,fullW=fullH*image.width/image.height;
     const h=b.lying?fullW:b.sitting?fullH*.80:fullH,w=b.lying?fullH:fullW;
-    g.fillStyle='#00000044';g.beginPath();g.ellipse(p.x+v.scale,p.y,4.5*v.scale*size,1.2*v.scale*size,0,0,Math.PI*2);g.fill();
     animate(g,image,p.x,p.y,fullW,b.sitting?fullH*.80:fullH,b,still);
     if(b.working&&!b.lying){g.fillStyle='#b8e6a6';g.globalAlpha=still?1:.8+.2*Math.sin(now/180);g.fillRect(p.x+w*.4,p.y-h*.42,2*v.scale,1.5*v.scale);g.globalAlpha=1;}
     if(b.waiting){g.fillStyle='#ef895e';g.beginPath();g.arc(p.x,p.y-h-8,3,0,Math.PI*2);g.fill();}
@@ -134,8 +177,9 @@ const OpenArtWorld = (() => {
   }
   function drawLabels(g,v,art){
     const occupied=[],font=Math.max(12,Math.min(16,v.scale*4.4));
+    const family=art.model.id==='steampunk-airship'?'Georgia,"Times New Roman","Nimbus Roman",OSRSPlain,serif':'"Arial Narrow","Liberation Sans Narrow","Nimbus Sans Narrow","Helvetica Neue",Arial,OSRSPlain,sans-serif';
     for(const {b,role,p,w,h,name}of labels){
-      g.font=font+'px OSRSBold,monospace';const sub=role.job,width=Math.max(g.measureText(name).width,g.measureText(sub).width)+4,height=b.tool||b.waiting?44:29;
+      g.font='600 '+font+'px '+family;const sub=role.job,width=Math.max(g.measureText(name).width,g.measureText(sub).width)+4,height=b.tool||b.waiting?44:29;
       const anchor={x:p.x+Math.min(w*.20,12),y:p.y-h-4};let chosen;
       for(const dy of [0,-32,32,-64,64])for(const x0 of [anchor.x,p.x-width-w*.15]){
         const x=Math.max(4,Math.min(v.width-width-4,x0)),y=Math.max(font+5,Math.min(v.height-height-4,anchor.y+dy)),r={x:x-2,y:y-font,w:width,h:height};
@@ -143,8 +187,8 @@ const OpenArtWorld = (() => {
         if(!chosen||cost<chosen.cost)chosen={x,y,r,cost};
       }
       const {x,y,r}=chosen;occupied.push(r);g.textAlign='left';g.textBaseline='bottom';g.lineWidth=3;g.strokeStyle='#060b11';
-      g.font=font+'px OSRSBold,monospace';g.strokeText(name,x,y);g.fillStyle=art.model.palette[3];g.fillText(name,x,y);
-      g.font=Math.max(12,font-1)+'px OSRSPlain,monospace';g.strokeText(sub,x,y+15);g.fillStyle='#f1ede3';g.fillText(sub,x,y+15);
+      g.font='600 '+font+'px '+family;g.strokeText(name,x,y);g.fillStyle=art.model.palette[3];g.fillText(name,x,y);
+      g.font=Math.max(12,font-1)+'px '+family;g.strokeText(sub,x,y+15);g.fillStyle='#f1ede3';g.fillText(sub,x,y+15);
       if(b.tool||b.waiting){const text=b.waiting?'Awaiting approval':String(b.tool);g.strokeText(text,x,y+30);g.fillStyle=b.waiting?'#f7b66e':'#b8d9a8';g.fillText(text,x,y+30);}
       hitRects.push({kind:'agent',id:b.id,wx:b.x,wy:b.y,...r});
     }
@@ -163,6 +207,7 @@ const OpenArtWorld = (() => {
     g.fillStyle=art.model.palette[0];g.fillRect(0,0,W,H);
     for(let i=0;i<90;i++){g.fillStyle=i%7?'#c7d2dc55':art.model.palette[3]+'99';g.fillRect((i*377+71)%W,(i*719+47)%H,i%7?.6:1.1,.7);}
     drawTerrain(g,view,s,edges,art);
+    drawGrounding(g,view,s,edges);
     for(const belt of s.layout.belts||[])quad(g,view,belt.x,belt.y,s.layout.tileSize,s.layout.tileSize,.1,art.model.palette[1],art.model.palette[2]);
     const items=s.equipment.map(p=>({y:p.y+p.h,draw:()=>drawProp(g,view,p,art)}));
     for(const body of s.bodies)if(!body.unplaced)items.push({y:body.y,draw:()=>drawBody(g,view,body,art,frame.now,frame.reducedMotion)});
@@ -177,9 +222,11 @@ const OpenArtWorld = (() => {
   function clientToWorld(e,canvas){if(!active()||!view)return null;const p=pointFromClient(e,canvas),hit=hitPoint(p.x,p.y);return hit?{x:hit.wx,y:hit.wy}:OSRSWorld.unproject(view,p.x,p.y);}
   function clientHit(e,canvas){if(!active()||!view)return null;const p=pointFromClient(e,canvas);return hitPoint(p.x,p.y);}
   function drawPortrait(canvas,record){
-    const art=active()?StationArt.load(current()):null,role=StationPresentation.roleFor(record).kind,image=art?.portraits?.[role]||art?.npc[role];if(!image)return false;
-    const g=canvas.getContext('2d'),k=Math.min((canvas.width-2)/image.width,(canvas.height-2)/image.height);g.clearRect(0,0,canvas.width,canvas.height);
-    g.drawImage(image,(canvas.width-image.width*k)/2,canvas.height-image.height*k-1,image.width*k,image.height*k);return true;
+    const art=active()?StationArt.load(current()):null,role=StationPresentation.roleFor(record).kind,portrait=art?.portraits?.[role],image=portrait||art?.npc[role];if(!image)return false;
+    const g=canvas.getContext('2d'),k=portrait?Math.max(canvas.width/image.width,canvas.height/image.height):Math.min((canvas.width-2)/image.width,(canvas.height-2)/image.height);g.clearRect(0,0,canvas.width,canvas.height);
+    // The sidebar's square portrait crops fill the reused canvas instead of inheriting
+    // the old full-body portrait's blank top margin. Whole-body fallbacks keep their feet.
+    g.drawImage(image,(canvas.width-image.width*k)/2,portrait?(canvas.height-image.height*k)/2:canvas.height-image.height*k-1,image.width*k,image.height*k);return true;
   }
   function drawMapEquipment(g,p){
     const art=active()?StationArt.load(current()):null,image=art?.props[propSpriteKind(p)];if(!image)return false;

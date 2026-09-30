@@ -151,6 +151,7 @@ UI-only rollback is simply **UI STYLE → Original StarNet**. Code rollback is r
 experimental checkout to the baseline branch/commit. No station migration is needed.
 `rollback/pre-openart-styles-d99ff0e` preserves the approved OSRS/armour revision before these
 five new styles. The bundle includes that commit, so the same rollback branch can be recreated.
+`rollback/pre-openart-polish-7b9b8ba` retains the first source-backed implementation of those styles.
 
 ## Verification
 
@@ -165,6 +166,8 @@ presentations before the armour/material and OpenArt revisions. Current validati
 - Direct execution of all five shipped `OpenArtWorld` views loaded the preserved source images,
   rendered nine real fixture agents and 19 placed props, produced picking bounds, and left all
   immutable station inputs unchanged. The current previews capture this renderer execution.
+  `node scripts/render-station-style-previews.mjs --out /path/to/previews` reproduces these checks
+  from a bundled canonical review fixture without a user save, server or provider credentials.
 - Theme tests also cover all eight catalog entries, the source PNG dimensions, immutable asset
   definitions, complete-view switching, real equipment identities, inverse coordinates, native
   fallback and reduced-motion/odometer behavior. The source and assets for OSRS are byte-identical
@@ -172,8 +175,8 @@ presentations before the armour/material and OpenArt revisions. Current validati
 - The expanded `scripts/verify-station-themes.mjs` checks all eight styles, real new-theme agent
   picking, source-backed framing, rune/dragon on a working agent, unchanged canonical data,
   per-agent reload/reset and a phone-size appearance picker. Current browser checks remain
-  unverified: the available Chrome attempt was blocked by local IPC policy, escalation was
-  rejected, and a later configured Chrome path had no executable. Do not treat these checks as passed.
+  unverified: Chrome's binary is available, but default local IPC binding still returns `EPERM`.
+  The previous escalation was rejected. Do not treat these checks as passed.
 - Website mirror synchronization and `git diff --check` passed.
 
 Earlier browser validation (before this revision):

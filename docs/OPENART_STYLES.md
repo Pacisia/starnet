@@ -33,6 +33,10 @@ desk hides a character's legs, compatible trouser/boot pixels from that same con
 the walking entity. Where a source worker covers equipment, clean source console panels replace
 the occluded portion so a frozen duplicate worker is not painted into the station.
 
+The refinement pass uses role-specific contours instead of applying a single human outline to
+every outfit. Portrait crops follow each concept's actual row positions. These are presentation
+definitions; they do not write an appearance, model or role back into the roster.
+
 `OpenArtWorld` registers five complete views through the existing `StationPresentation` API.
 It shares the perspective projection and outline helpers, consumes the immutable station
 snapshot, and renders real rooms, equipment footprints, ownership, crew positions and activity.
@@ -46,6 +50,11 @@ portholes. Flat console sources receive textured bases. Depth ordering, contact 
 collision-aware live name/role labels keep crew and equipment readable. Unrecognized future
 props get a visible, pickable fallback instead of disappearing.
 
+Hull panels use wider structural spans, raised trim and lower sills. Floor material panels share
+a restrained room-wide light falloff. Layered equipment-footprint and foot shadows are clipped
+to the actual floor, including holes, and drawn before all entities. The frame loop does no
+pixel readback and cached terrain is reused until geometry or the view changes.
+
 Walking animation uses the native position, facing and odometer. Working, waiting, seated and
 resting poses use native state; reduced motion disables the added gait/pulse. Sprite and label
 hits resolve to real agent/equipment identities. Clicking them opens the existing StarNet
@@ -55,6 +64,13 @@ inspection surfaces. The live minimap uses canonical placement and equipment use
 reusing its printed example values. The original event stream, conversations, command composer,
 model/agent/attachment/voice controls, native windows and automation-resume control remain wired
 to their existing handlers. No mock task percentages or status feed are introduced.
+
+The footer's eight real-window buttons now sample the actual reference icon cells. Their desktop
+strip spans the reference's bottom-right area; compact layouts keep the native menu row. Crew
+rows show the real agent name and current status alongside the source portrait. Actual roles
+remain available in the row title and native dossier. System font stacks match the four sci-fi
+concepts' condensed sans lettering and the airship's serif treatment; no external font requests
+are added. OSRS's independent fonts, markup behavior and appearance options remain unchanged.
 
 ## Scope and visual limits
 
@@ -83,6 +99,18 @@ in the handoff ZIP contains these direct outputs, not live-browser screenshots o
 The prior OSRS renderer previews are retained. OSRS source and assets compare byte for byte
 against `d99ff0e7341baa14d5959127ba4bd67f2d8778fb`.
 
+The direct check is reproducible after the existing `npm ci`:
+
+```sh
+node scripts/render-station-style-previews.mjs --out /absolute/path/to/renderer-previews
+```
+
+It uses the bundled canonical review-station fixture, decodes the actual PNG sources and runs
+each shipped renderer in a separate process to bound native image memory. It checks decoded
+visible/transparent sprite boundaries, the immutable snapshot, agent/equipment hit counts and
+canonical picking. It performs no provider calls and needs no saved user workspace, server or
+browser. These captures verify renderer execution; they do not replace browser layout checks.
+
 Full current browser validation remains pending. `scripts/verify-station-themes.mjs` is extended
 for the five loaded sources and their real NPC interactions, as well as the existing original,
 OSRS/armour, holographic, persistence and compact-layout checks. Run it in a normal development
@@ -95,6 +123,8 @@ environment with a working `SKYNET_CHROME` executable. The last completed browse
 **UI STYLE → Original StarNet** restores native presentation. OSRS remains independently
 available with all existing NPC/armour options. `rollback/pre-openart-styles-d99ff0e` preserves
 the pre-OpenArt code; no data migration is required.
+`rollback/pre-openart-polish-7b9b8ba` preserves the first five-style revision before the graphics
+refinement pass.
 
 For another concept-backed view, add a catalog entry, a source image and a frozen asset definition.
 For a different rendering system, register its own complete view with `draw`, `clientToWorld`,
