@@ -459,6 +459,7 @@ test/window-minimize.test.js
 test/nightshift-steer-ui.test.js
 test/world-agent-click.test.js
 test/worldrenderer.test.js
+test/presentation-themes.test.js
 test/world-sharpen.test.mjs
 test/world-immersion-characters.test.js
 test/prop-light-response.test.js
