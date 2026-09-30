@@ -3724,8 +3724,10 @@ function recordClaudeUsage(acct, info) {
     try { AirtableSync.observe('accounts.usage', { list: accountsUsageSnapshot() }); } catch (_) {}
   } catch (_) {}
 }
+// A usage window whose reset time has passed is empty again: the reading is only stale until that account next reports.
+function liveWindow(w) { return (w && w.resetsAt && w.resetsAt < Date.now()) ? Object.assign({}, w, { used: 0, resetsAt: null, expired: true }) : w; }
 function restIfSpent(provider, acct, u) {
-  const spent = [u.short, u.weekly].filter(w => w && w.used >= 0.999);
+  const spent = [liveWindow(u.short), liveWindow(u.weekly)].filter(w => w && w.used >= 0.999);
   if (u.status === 'rejected' || spent.length) {
     const until = Math.max(...spent.map(w => w.resetsAt || 0), 0) || (Date.now() + Accounts.DEFAULT_COOLDOWN_MS);
     const ms = Math.max(60000, until - Date.now());
@@ -3769,7 +3771,7 @@ function accountsUsageSnapshot() {
   const add = (provider, acct, signedIn) => {
     const u = accountUsage[usageKey(provider, acct)] || null;
     const until = accountRouter.coolingUntil(provider, acct) || null;
-    out.push({ provider, account: acct, signedIn: !!signedIn, plan: u ? u.plan : '', short: u ? u.short : null, weekly: u ? u.weekly : null,
+    out.push({ provider, account: acct, signedIn: !!signedIn, plan: u ? u.plan : '', short: u ? liveWindow(u.short) : null, weekly: u ? liveWindow(u.weekly) : null,
       status: until ? 'resting' : (u && u.status === 'allowed_warning' ? 'near limit' : 'ok'), restingUntil: until, updated: u ? u.updated : null, source: u ? u.source : '' });
   };
   add('claude-code', 'A', true);
