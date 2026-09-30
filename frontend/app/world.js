@@ -1831,6 +1831,10 @@ const World = (() => {
     return Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x < cv.width && y >= 0 && y < cv.height ? { x, y } : null;
   }
   function curvePoint(c) {
+    if (typeof OSRSWorld !== 'undefined' && OSRSWorld.active()) {
+      const projected = OSRSWorld.worldToCanvas((c.x-panX)/scale,(c.y-panY)/scale);
+      if (projected) return projected;
+    }
     if (typeof StationPresentation !== 'undefined' && StationPresentation.active()) return c;
     if (CRT.curve <= 0 || document.body.classList.contains('no-scan')) return c;
     const hw = cv.width / 2, hh = cv.height / 2;
@@ -1839,6 +1843,9 @@ const World = (() => {
     return { x: hw + nx * f * hw, y: hh + ny * f * hh };
   }
   function toWorld(ev) {
+    if (typeof OSRSWorld !== 'undefined' && OSRSWorld.active()) {
+      const projected = OSRSWorld.clientToWorld(ev,cv);if(projected)return projected;
+    }
     const c = uncurvePoint(toCanvas(ev));
     return c ? { x: (c.x - panX) / scale, y: (c.y - panY) / scale } : null;
   }
@@ -6610,6 +6617,10 @@ const World = (() => {
     drawCurve(now); // barrel-warp the whole feed IN-CANVAS — the original (dot-matrix-era) curve, no dots
     reviewMark('postProcess');
     drawCRT(now);   // scanlines + fade, painted in-canvas at device-px OVER the warped feed (no moiré)
+    // Presentation-only replacement, AFTER all native conveyor ticks, deliveries, prop updates and
+    // simulation work. Never early-return around that functional work when an alternate view is selected.
+    if (typeof OSRSWorld !== 'undefined' && OSRSWorld.active())
+      OSRSWorld.draw(ctx,cv,{snapshot:presentationSnapshot(),now,reducedMotion:reduceMotion()});
     paintStageHeartbeat();   // the frame's last act: the one opaque pixel a dead stage context cannot fake (see watchStageLoss)
     reviewMark('static');
     updateCameraHud(now);
@@ -10095,12 +10106,14 @@ const World = (() => {
         floor.push(Object.freeze({ x: from * T, y: y * T, w: (x - from) * T, h: T }));
       }
       presentationGeo = geo;
-      presentationLayout = Object.freeze({ width: geo.W, height: geo.H, tileSize: T, floor: Object.freeze(floor) });
+      const belts=Object.freeze((geo.belts||[]).map(p=>Object.freeze({x:p.x*T,y:p.y*T,dir:p.dir||p.d||null})));
+      presentationLayout = Object.freeze({ width: geo.W, height: geo.H, tileSize: T, floor: Object.freeze(floor),belts });
     }
     const list = [agent, ...crew].filter(Boolean);
     const bodies = list.map(b => Object.freeze({
       id: b.agentId || b.id, name: b.name || b.id, x: bodyPosX(b), y: bodyPosY(b),
-      moving: !!b.target, working: !!b.working || !!b.sitting || agentRunsLive(b.agentId || b.id),
+      dir:b.dir,state:b.state,odo:b.odo||0,sitting:!!b.sitting,seated:!!b.seated,lying:!!b.lying,
+      moving: !!b.target, working: !!b.working || agentRunsLive(b.agentId || b.id),
       waiting: b === agent ? !!awaitPrompt : crewIsAwaiting(b), unplaced: !!b.unplaced,
       tool: (glyphByAgent.get(b.agentId || b.id) || {}).name || null, usingProp: b.usingProp || null
     }));
@@ -10112,12 +10125,13 @@ const World = (() => {
         const cap = tool && typeof ToolProps !== 'undefined' ? ToolProps.toolPropType(tool) : null;
         return !!cap && capPropFor(cap, id) === p;
       }).map(b => b.agentId || b.id);
-      return Object.freeze({ id: p.id, type: p.t, capability, x: p.x * T, y: p.y * T,
+      return Object.freeze({ id: p.id, type: p.t, capability, agentId:p.agentId||null, rotation:p.r||0, x: p.x * T, y: p.y * T,
         w: (p.w || 1) * T, h: (p.h || 1) * T, users: Object.freeze(users) });
     });
     const view = typeof WorldRenderer !== 'undefined' ? WorldRenderer.visibleRect({ scale, panX, panY, width: cv.width, height: cv.height }) : null;
+    const transports=Object.freeze((convey&&convey.peekBoxes?convey.peekBoxes():[]).map(p=>Object.freeze({x:(p.x+.5)*T,y:(p.y+.5)*T})));
     return Object.freeze({ layout: presentationLayout, bodies: Object.freeze(bodies), equipment: Object.freeze(equipment),
-      viewport: view && Object.freeze(view), connected: !linkDown(fnow), paused: bridgePaused });
+      viewport: view && Object.freeze(view), transports, connected: !linkDown(fnow), paused: bridgePaused });
   }
   function presentationFocus(x, y) {
     if (!geo || !Number.isFinite(x) || !Number.isFinite(y) || camAnim || awakeFrozen) return false;

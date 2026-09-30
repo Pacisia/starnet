@@ -52,4 +52,19 @@ assert.equal(Art.drawBody(native,body,100,{}),null);assert.equal(Art.drawProp(na
 assert.equal(native.calls.length,0,'original takes the native path without painting replacement art');
 for(const id of ['cyberpunk','holographic']){Themes.set(id,{persist:false});assert.ok(Art.drawBody(context(),body,100,{}));assert.equal(Art.drawProp(context(),prop,{}),false);}
 assert.equal(Art.register('original',{}),false,'the original renderer cannot be replaced through registration');
+const perspectiveScope={module:{exports:{}},StationPresentation:Art,PresentationThemes:Themes};
+vm.runInNewContext(fs.readFileSync(require.resolve('../frontend/app/osrs-world.js'),'utf8'),perspectiveScope);
+const Perspective=perspectiveScope.module.exports;
+const layout=Object.freeze({width:288,height:240,tileSize:12,floor:Object.freeze([Object.freeze({x:36,y:24,w:216,h:180})])});
+for(const zoom of [.25,1,3])for(const center of [{x:144,y:114},{x:90,y:150}]){
+  const view=Perspective.makeView(layout,962,610,zoom,center);
+  for(const [x,y]of [[36,24],[100,100],[252,204],[144,114]]){
+    const p=Perspective.project(view,x,y),world=Perspective.unproject(view,p.x,p.y);
+    assert.ok(Math.abs(world.x-x)<1e-9&&Math.abs(world.y-y)<1e-9,'perspective picking inverts the displayed camera at each pan/zoom');
+  }
+}
+assert.equal(Perspective.propIndex({type:'comms_dish',capability:'dish'}),3);
+assert.equal(Perspective.propIndex({type:'war_intelcab',capability:'cabinet'}),2);
+assert.equal(Perspective.propIndex({type:'future_equipment',capability:'future_capability'}),null,'future equipment has a visible fallback');
+assert.equal(Perspective.active(),false,'perspective pass never takes over another renderer');
 console.log('presentation-themes: storage isolation, roles, native fallback, immutable inputs and reduced-motion rendering passed');

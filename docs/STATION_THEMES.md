@@ -3,6 +3,7 @@
 This experiment starts at `f39699c723f28b56c358ef9079ccb0da15f77c21` (Pacisia's latest
 `feat/harness-backend` on 30 September 2026). The working branch is
 `feat/station-ui-themes`; `rollback/pre-station-ui-themes-f39699c` identifies the baseline.
+`rollback/osrs-v1-267c8fe` preserves the first theme implementation before the reference revision.
 
 ## Using the picker
 
@@ -10,8 +11,9 @@ The **UI STYLE** picker is in the station's top bar. The same choices are availa
 **Settings → Appearance → Station UI**:
 
 - **Original StarNet**: the native station, sprites, panels and conversation layout.
-- **OSRS Guild**: stone floors, timber and metal capability equipment, original low-poly
-  fantasy crew, a stone-framed minimap and a parchment conversation/activity area.
+- **OSRS Guild**: the supplied reference's gold header, stone and wood client framing,
+  perspective stone station, detailed fantasy NPCs, timber/CRT capability equipment,
+  circular live minimap with real station counts and parchment chat/activity area.
 - **Neon Cyberpunk**: violet floors, neon signals and armored crew.
 - **Holographic Command**: a blue wireframe deck with translucent projected crew.
 
@@ -46,9 +48,15 @@ The additions are confined to presentation:
 4. `station-theme-ui.js` and `station-themes.css`: picker, optional game-client layout,
    minimap, read-only instruments and a bounded activity feed. Existing windows and handlers
    remain the navigation targets. There are no new backend API endpoints or capability grants.
+5. `osrs-world.js` and `osrs-client.css`: a separate perspective renderer and the reference client
+   layout. The renderer consumes the same immutable snapshot, paints after native simulation,
+   conveyor and delivery processing, and inverts its own projection for native mouse picking.
+   Sprite and label hit rectangles resolve to canonical agent/equipment coordinates. Pan, zoom,
+   camera focus, minimap selection and station expansion continue to use the existing world.
+   Sprite alpha bounds and wall outlines are cached; the frame loop does no pixel readback.
 
 Only small hooks are added at the existing world/base, prop and body draw boundaries. Native
-pathfinding, hit testing, conveyors, ownership, task progress, permissions and save logic remain
+pathfinding, entity selection, conveyors, ownership, task progress, permissions and save logic remain
 authoritative. No agent skin is rewritten in the roster when changing theme.
 
 Alternate renderers bypass the native CRT grain, bloom and curved-screen pass, including its
@@ -61,12 +69,17 @@ including the fork's latest custom-provider endpoint form changes already presen
 Research → mage; analytics → elder scholar; content → ranger; security → knight;
 data → crafter/cook; finance → banker; integrations → elf; engineering → dwarf;
 web → traveller; orchestrator → operator. Explicit specialties take priority over names
-or purpose text. Characters are drawn from original procedural artwork, rather than
-embedded screenshots or a downloaded RuneScape client. This is an OSRS-inspired experiment,
-not a pixel-identical reproduction of the supplied concept images.
+or purpose text. The OSRS revision uses generated sprite atlases with four facing directions,
+including distinct traveller and operator art; other experimental themes retain their procedural
+art. The supplied image provides decorative client framing and icons. The station scene,
+NPC locations, equipment, minimap, counts and activity are rendered from live state.
+The source image's fixed values, agents and progress messages are never used as live telemetry.
+See `OSRS_ASSETS.md` for asset provenance and the bundled font license.
 
 Walking uses the existing body's position, facing and odometer. Idle, working, seated and sleeping
-poses use the simulation's state; reduced motion makes the added animation steady. The
+poses use the simulation's state; seated sprites compress their lower pose, resting sprites lie
+down, and working equipment/agents show activity. Labels avoid each other when a crew gathers.
+Reduced motion makes the added animation steady. The
 existing simulation moves working agents to their assigned workstation and handles leisure
 equipment interactions. This change does not invent a separate movement simulation or make
 every tool call trigger a new physical trip. The existing equipment pulse and activity
@@ -79,10 +92,12 @@ and current users; click the map to pan. Enter/Space restores the station overvi
 usage, models, queues and detailed task history remain in the existing dossier/conversation
 surfaces; no invented metrics or mission percentages are shown.
 
-**Conversation / Station activity** changes which log is visible while keeping the existing
+**Conversation / Station activity**, or the OSRS footer's real activity channels, changes which log is visible while keeping the existing
 composer. Focusing the composer returns to the conversation. The activity log subscribes to
 existing run/tool/verification/delivery events, uses escaped text, stores at most 120 entries
-in memory and starts with an honest empty state. Current Work lists actual busy sessions.
+in memory. Connection and crew arrivals are reported from observed state. Current Mission lists
+actual busy sessions and never invents a progress percentage. **Controls** exposes the existing
+agent/model/attachment/voice controls; they also appear when the composer receives focus.
 
 The compact layout retains the live world, a small minimap, conversation and all existing dock
 menus on narrow screens. Expanded conversation mode still uses the original conversation.
@@ -104,14 +119,19 @@ Passed on the isolated copy:
 
 - `node test/presentation-themes.test.js`: preference isolation, invalid storage, role identity,
   frozen render inputs, native fallback, sleeping pose and reduced motion.
+  Also checks inverse perspective picking across camera pans and zooms, and equipment mappings.
 - `SKYNET_CHROME=<chrome-path> node scripts/run-fast-tests.mjs presentation-themes world station-authority crew-containment settings-p1 bootguard`:
   20 suites, including actual WebGL/Canvas renderer parity, geometry, lifecycle, seating, movement,
   station authority and settings.
 - `SKYNET_CHROME=<chrome-path> node scripts/verify-station-themes.mjs`: real browser picker changes,
   station/roster identity preservation, frozen projections, real minimap clicks opening native
-  dossiers and equipment inspection, event escaping/filter/cap, working-state preservation,
+  dossiers and equipment inspection, perspective NPC clicks and canonical equipment picking,
+  event escaping/filter/cap, working-state preservation,
   Settings cards, expanded conversation, reload persistence and 390 × 844 layout.
 - Desktop captures of all four styles at 1536 × 1024 and the OSRS phone layout: no browser exceptions.
+  The reference review uses a separate seeded workspace with a shaped floor, placed capability
+  equipment and role-specific agents, at 100% text size. Agent placement uses existing review
+  controls for the screenshot; no user station is rearranged by switching renderer.
 - Website mirror synchronization and `git diff --check`.
 
 The complete `npm run test:fast` gate is **not green**. It reached step 293/844 and failed

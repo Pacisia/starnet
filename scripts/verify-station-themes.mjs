@@ -50,6 +50,7 @@ try {
     assert.ok(await evaluate(`document.body.dataset.stationTheme===${JSON.stringify(id)}`), 'picker applies ' + id);
   }
   await choose('osrs');
+  await waitFor(`typeof OSRSWorld!=='undefined'&&OSRSWorld.ready()&&OSRSWorld.hitRects().some(r=>r.kind==='agent')`, 'perspective assets and real entities ready');
   assert.ok(await evaluate(`(() => {const s=World.presentationSnapshot();return Object.isFrozen(s)&&Object.isFrozen(s.bodies)&&Object.isFrozen(s.bodies[0])&&Object.isFrozen(s.layout.floor)&&Object.isFrozen(s.equipment[0].users);})()`), 'projection is immutable');
   assert.ok(await evaluate(`World.presentationSnapshot().bodies.every(b=>{const original=World.bodies().find(a=>a.id===b.id);return original&&Math.abs(original.px-b.x)<2&&Math.abs(original.py-b.y)<2;})`), 'minimap projects actual body positions');
 
@@ -58,6 +59,13 @@ try {
   await clickPoint(await mapPoint('s.bodies[0]'));
   await waitFor(`!!document.querySelector('.term.dossier')`, 'minimap opens native dossier');
   await evaluate(`StationUI.closeTerm('agents')`);
+  // Perspective sprites and their labels use the same real body picking path as Original.
+  const actorPoint=await evaluate(`(() => {const r=OSRSWorld.hitRects().find(r=>r.kind==='agent'),c=document.getElementById('stage'),b=c.getBoundingClientRect();return {x:b.left+(r.x+r.w/2)*b.width/c.width,y:b.top+(r.y+r.h/2)*b.height/c.height};})()`);
+  await clickPoint(actorPoint);
+  await waitFor(`!!document.querySelector('.term.dossier')`, 'perspective NPC opens native dossier');
+  await evaluate(`StationUI.closeTerm('agents');StationThemeUI.nav('station')`);
+  await sleep(400);
+  assert.ok(await evaluate(`(() => {const c=document.getElementById('stage'),r=c.getBoundingClientRect(),p=OSRSWorld.hitRects().find(r=>r.kind==='equipment');if(!p)return false;const e={clientX:r.left+(p.x+p.w/2)*r.width/c.width,clientY:r.top+(p.y+p.h/2)*r.height/c.height};const hit=OSRSWorld.clientHit(e,c);return hit&&hit.kind==='equipment'&&World.presentationSnapshot().equipment.some(p=>p.id===hit.id);})()`), 'equipment sprite picks a canonical equipment ID');
   await clickPoint(await mapPoint(`(() => {const p=s.equipment.find(p=>p.capability==='cabinet')||s.equipment[s.equipment.length-1];return {x:p.x+p.w/2,y:p.y+p.h/2};})()`));
   await waitFor(`!document.getElementById('station-equipment-detail').hidden`, 'minimap equipment inspector opens');
   assert.ok(await evaluate(`document.getElementById('station-equipment-cap').textContent.length>0`), 'equipment has canonical capability');
@@ -93,7 +101,7 @@ try {
   await choose('original');
   assert.ok(await evaluate(`getComputedStyle(document.getElementById('station-game-overview')).display==='none'&&!document.getElementById('chat-panel').classList.contains('station-activity-selected')`), 'original restores native UI');
   assert.deepEqual(errors, [], 'no browser exceptions');
-  console.log('station-themes browser: all four renderers, state preservation, minimap clicks, event filters, working state, Settings, persistence, expanded conversation and 390px layout passed; no provider calls');
+  console.log('station-themes browser: all four renderers, state preservation, perspective NPC and equipment picking, minimap clicks, event filters, working state, Settings, persistence, expanded conversation and 390px layout passed; no provider calls');
 } finally {
   if (cdp) { try { await cdp.send('Browser.close'); } catch {} }
   for (const p of [chrome, server]) { if (p && p.exitCode == null) p.kill('SIGKILL'); }

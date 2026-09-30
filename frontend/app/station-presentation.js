@@ -6,16 +6,16 @@ const StationPresentation = (() => {
   let lookupAgent = () => null, plate = null, plateSource = null, plateTheme = null, plateGeo = null;
   const selected = () => typeof PresentationThemes === 'undefined' ? 'original' : PresentationThemes.get();
   const ROLES = Object.freeze({
-    player: { name: 'Operator', color: '#63748b', trim: '#dccb89', kind: 'player' },
-    mage: { name: 'Research Mage', color: '#922e2c', trim: '#d4b44c', kind: 'mage' },
-    scholar: { name: 'Elder Scholar', color: '#8e9999', trim: '#d6d9c5', kind: 'scholar' },
-    ranger: { name: 'Ranger', color: '#3c7035', trim: '#c4a14c', kind: 'ranger' },
-    guard: { name: 'Knight', color: '#5d7790', trim: '#c2c8cb', kind: 'guard' },
-    cook: { name: 'Crafter', color: '#d9d6c2', trim: '#747d7c', kind: 'cook' },
-    banker: { name: 'Banker', color: '#533e79', trim: '#d4bc57', kind: 'banker' },
-    elf: { name: 'Elven Artificer', color: '#7e9462', trim: '#d1ce9e', kind: 'elf' },
-    dwarf: { name: 'Dwarven Smith', color: '#867855', trim: '#b3a488', kind: 'dwarf' },
-    scout: { name: 'Traveller', color: '#887443', trim: '#bdad80', kind: 'scout' }
+    player: { name: 'Operator', npcName:'Operator', job:'Station Operator', color: '#63748b', trim: '#dccb89', kind: 'player' },
+    mage: { name: 'Research Mage', npcName:'Zamorak Mage', job:'Research Agent', color: '#922e2c', trim: '#d4b44c', kind: 'mage' },
+    scholar: { name: 'Elder Scholar', npcName:'Wise Old Man', job:'Analytics Agent', color: '#8e9999', trim: '#d6d9c5', kind: 'scholar' },
+    ranger: { name: 'Ranger', npcName:'Robin Hood', job:'Content Agent', color: '#3c7035', trim: '#c4a14c', kind: 'ranger' },
+    guard: { name: 'Knight', npcName:'Guard', job:'Security Agent', color: '#5d7790', trim: '#c2c8cb', kind: 'guard' },
+    cook: { name: 'Crafter', npcName:'Cook', job:'Data Agent', color: '#d9d6c2', trim: '#747d7c', kind: 'cook' },
+    banker: { name: 'Banker', npcName:'Banker', job:'Finance Agent', color: '#533e79', trim: '#d4bc57', kind: 'banker' },
+    elf: { name: 'Elven Artificer', npcName:'Elven Guard', job:'Integration Agent', color: '#7e9462', trim: '#d1ce9e', kind: 'elf' },
+    dwarf: { name: 'Dwarven Smith', npcName:'Dwarf', job:'Build Agent', color: '#867855', trim: '#b3a488', kind: 'dwarf' },
+    scout: { name: 'Traveller', npcName:'Draynor Villager', job:'Web Agent', color: '#887443', trim: '#bdad80', kind: 'scout' }
   });
   function roleFor(record) {
     const a = record || {};

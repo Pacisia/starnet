@@ -2,7 +2,8 @@
 'use strict';
 const StationThemeUI = (() => {
   let snapshot = null, mapTransform = null, feedMode = 'conversation', filter = 'all', roster = [], lastSignature = '';
-  const events = [], CAP = typeof StationPresentation !== 'undefined' ? StationPresentation.CAPABILITIES : {};
+  const events = [], seenBodies=new Set(), CAP = typeof StationPresentation !== 'undefined' ? StationPresentation.CAPABILITIES : {};
+  let welcomed=false;
   const el = id => document.getElementById(id);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   function agentName(id) { const a=roster.find(a=>a.id===id);return a&&a.name||id||'StarNet'; }
@@ -13,9 +14,14 @@ const StationThemeUI = (() => {
     if(typeof StationUI!=='undefined')StationUI.openAgent(index);
   }
   function nav(action) {
-    if(action==='station'){ if(typeof World!=='undefined'&&World.presentationOverview)World.presentationOverview();return; }
+    el('left')?.classList.toggle('osrs-projects-open',action==='projects');
+    document.querySelectorAll('.station-game-nav [data-station-nav]').forEach(b=>b.setAttribute('aria-current',b.dataset.stationNav===action?'page':'false'));
+    if(action==='station'){ if(typeof OSRSWorld!=='undefined')OSRSWorld.reset();if(typeof World!=='undefined'&&World.presentationOverview)World.presentationOverview();return; }
     if(action==='missions'){el('bb-missions')?.click();return;}
     if(action==='projects'){document.querySelector('[data-ws-tab="projects"]')?.click();el('ws-tab-projects')?.click();return;}
+    if(action==='analytics'){StationUI.openTerm('agents','record');return;}
+    if(action==='refit'){el('bb-build')?.click();return;}
+    if(action==='recruit'){el('bb-recruit')?.click();return;}
     if(typeof StationUI!=='undefined')StationUI.openTerm(action);
   }
   function mount() {
@@ -23,18 +29,21 @@ const StationThemeUI = (() => {
     const picker=document.createElement('label');picker.className='station-ui-picker';picker.innerHTML='<span>UI STYLE</span><select id="station-ui-select" aria-label="Station UI style">'+PresentationThemes.catalog.map(t=>'<option value="'+t.id+'">'+t.name+'</option>').join('')+'</select>';
     top.insertBefore(picker,top.querySelector('.tb-stats'));el('station-ui-select').value=PresentationThemes.get();
     picker.addEventListener('change',e=>PresentationThemes.set(e.target.value));
+    const status=document.createElement('div');status.className='osrs-station-status';status.id='osrs-station-status';status.setAttribute('role','status');top.appendChild(status);
     const navBar=document.createElement('nav');navBar.className='station-game-nav';navBar.setAttribute('aria-label','Station navigation');
-    navBar.innerHTML=[['station','✦','Station'],['agents','♟','Agents'],['missions','▤','Missions'],['deliverables','▣','Files'],['connectors','◎','Integrations'],['quests','⚑','Quests'],['settings','⚒','Settings']].map(([id,glyph,label])=>'<button type="button" data-station-nav="'+id+'"><i aria-hidden="true">'+glyph+'</i>'+label+'</button>').join('');
+    navBar.innerHTML=[['station','✦','Station'],['agents','♟','Agents'],['missions','▤','Missions'],['projects','▥','Projects'],['deliverables','▣','Files'],['connectors','◎','Integrations'],['analytics','▥','Analytics'],['settings','⚒','Settings']].map(([id,glyph,label])=>'<button type="button" data-station-nav="'+id+'"'+(id==='station'?' aria-current="page"':'')+'><i class="osrs-nav-icon icon-'+id+'" aria-hidden="true">'+glyph+'</i>'+label+'</button>').join('');
     el('left')?.insertBefore(navBar,el('left').firstChild);
     navBar.addEventListener('click',e=>{const b=e.target.closest('[data-station-nav]');if(b)nav(b.dataset.stationNav);});
     const aside=document.createElement('aside');aside.id='station-game-overview';aside.setAttribute('aria-label','Station map and overview');
     aside.innerHTML='<div class="station-map-shell"><span class="station-map-north" aria-hidden="true">N<br>✦</span><canvas id="station-minimap" width="280" height="280" tabindex="0" role="button" aria-label="Live station minimap. Click an agent or equipment to inspect. Press Enter for the station overview."></canvas><div class="station-map-legend"><span>● Crew</span><span>▪ Equipment</span><span>◆ Active</span></div></div>'+
-      '<div class="station-overview-heading"><span>✦</span><div>STATION OVERVIEW<small id="station-overview-link">Connecting…</small></div></div>'+
-      '<dl class="station-overview-stats"><div><dt>Crew on station</dt><dd id="station-overview-crew">—</dd></div><div><dt>Working</dt><dd id="station-overview-working">—</dd></div><div><dt>Equipment</dt><dd id="station-overview-gear">—</dd></div></dl>'+
+      '<dl class="osrs-map-orbs" aria-label="Live station counts"><div title="Agents on station"><dt>Agents</dt><dd id="osrs-orb-crew">0</dd></div><div title="Agents currently working"><dt>Working</dt><dd id="osrs-orb-work">0</dd></div><div title="Station equipment"><dt>Equipment</dt><dd id="osrs-orb-gear">0</dd></div><div title="Agents waiting for approval"><dt>Waiting</dt><dd id="osrs-orb-wait">0</dd></div></dl>'+
+      '<div class="station-overview-heading"><span class="osrs-nav-icon icon-station">✦</span><div>Station Overview<small id="station-overview-link">Connecting…</small></div></div>'+
+      '<dl class="station-overview-stats"><div><dt>Agents Online</dt><dd id="station-overview-crew">—</dd></div><div><dt>Working Agents</dt><dd id="station-overview-working">—</dd></div><div><dt>Station Equipment</dt><dd id="station-overview-gear">—</dd></div></dl>'+
       '<section class="station-equipment-detail" id="station-equipment-detail" hidden><h4 id="station-equipment-name"></h4><p id="station-equipment-cap"></p><p id="station-equipment-users"></p><button type="button" data-station-nav="connectors">View abilities</button></section>'+
-      '<h4 class="station-side-title">ACTIVE CREW</h4><div id="station-map-crew" class="station-map-crew"></div>'+
-      '<h4 class="station-side-title">CURRENT WORK</h4><div id="station-current-work" class="station-current-work"></div>'+
-      '<div class="station-side-actions"><button type="button" data-station-nav="tasks">Task board</button><button type="button" data-station-nav="connectors">Capabilities</button></div>';
+      '<section class="station-mission-card"><h4 class="station-side-title"><i class="osrs-nav-icon icon-missions" aria-hidden="true">▤</i>Current Mission</h4><div id="station-current-work" class="station-current-work"></div></section>'+
+      '<section class="station-crew-card"><h4 class="station-side-title">Active Agents</h4><div id="station-map-crew" class="station-map-crew"></div></section>'+
+      '<div class="station-side-actions"><button type="button" data-station-nav="tasks">Task board</button><button type="button" data-station-nav="connectors">Capabilities</button></div>'+
+      '<nav class="osrs-client-tabs" aria-label="Station windows">'+[['tasks','Missions'],['analytics','Agent records'],['quests','Quests'],['deliverables','Files'],['recruit','Recruit'],['connectors','Abilities'],['agents','Agents'],['settings','Settings']].map(([id,label],i)=>'<button type="button" data-station-nav="'+id+'" aria-label="'+label+'" title="'+label+'" style="--tab-index:'+i+'"></button>').join('')+'</nav>';
     game.appendChild(aside);
     aside.addEventListener('click',e=>{const a=e.target.closest('[data-map-agent]');if(a)openAgent(a.dataset.mapAgent);const b=e.target.closest('[data-station-nav]');if(b)nav(b.dataset.stationNav);const w=e.target.closest('[data-map-work]');if(w&&typeof App!=='undefined')App.openWorkstream(w.dataset.mapWork);});
     const tabs=document.createElement('div');tabs.className='station-feed-tabs';tabs.setAttribute('role','group');tabs.setAttribute('aria-label','Conversation or station activity');
@@ -45,18 +54,24 @@ const StationThemeUI = (() => {
     tabs.addEventListener('click',e=>{const b=e.target.closest('[data-station-feed]');if(b)setFeed(b.dataset.stationFeed);});
     el('station-feed-filter').addEventListener('change',e=>{filter=e.target.value;renderEvents();});
     el('chat-input')?.addEventListener('focus',()=>setFeed('conversation'));
+    const prompt=document.createElement('span');prompt.className='osrs-player-prompt';prompt.textContent='Commander:';chat.querySelector('.chat-editline')?.prepend(prompt);
+    const filters=document.createElement('nav');filters.className='osrs-chat-filters';filters.setAttribute('aria-label','Station chat channels');
+    filters.innerHTML=[['all','All'],['agent','Agents'],['system','System'],['error','Errors'],['conversation','Chat'],['tools','Controls']].map(([id,label])=>'<button type="button" data-osrs-channel="'+id+'">'+label+'<small>On</small></button>').join('');
+    el('bottombar').prepend(filters);
+    filters.addEventListener('click',e=>{const b=e.target.closest('[data-osrs-channel]');if(!b)return;const mode=b.dataset.osrsChannel;if(mode==='tools'){chat.classList.toggle('osrs-controls-open');b.setAttribute('aria-pressed',String(chat.classList.contains('osrs-controls-open')));return;}if(mode==='conversation')setFeed('conversation');else{filter=mode;el('station-feed-filter').value=mode;setFeed('activity');renderEvents();}});
     el('station-minimap').addEventListener('click',mapClick);
     el('station-minimap').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();nav('station');}});
     document.addEventListener('click',e=>{const b=e.target.closest('[data-station-theme]');if(b)PresentationThemes.set(b.dataset.stationTheme);});
     StationPresentation.bind({agentRecord:id=>roster.find(a=>a.id===id)||null});
+    if(typeof OSRSWorld!=='undefined')OSRSWorld.bind(id=>roster.find(a=>a.id===id)||null);
     PresentationThemes.subscribe(changed);changed(PresentationThemes.get());
     wireEvents();setInterval(tick,250);tick();
   }
   function changed(id) {
     if(el('station-ui-select'))el('station-ui-select').value=id;
     document.querySelectorAll('[data-station-theme]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.stationTheme===id)));
-    StationPresentation.reset();setFeed(id==='original'?'conversation':feedMode);
-    lastSignature='';
+    StationPresentation.reset();if(typeof OSRSWorld!=='undefined')OSRSWorld.reset();setFeed(id==='osrs'?'activity':id==='original'?'conversation':feedMode);
+    lastSignature='';renderEvents();
     // Let the existing resize observer rebuild its canvas and camera using the new layout.
     window.dispatchEvent(new Event('resize'));tick();
     if(typeof World!=='undefined'&&World.presentationOverview)World.presentationOverview();
@@ -67,6 +82,7 @@ const StationThemeUI = (() => {
     el('chat-panel')?.classList.toggle('station-activity-selected',active);
     if(el('station-event-log'))el('station-event-log').hidden=!active;
     document.querySelectorAll('[data-station-feed]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.stationFeed===feedMode)));
+    document.querySelectorAll('[data-osrs-channel]:not([data-osrs-channel="tools"])').forEach(b=>b.setAttribute('aria-pressed',String(feedMode==='conversation'?b.dataset.osrsChannel==='conversation':b.dataset.osrsChannel===filter)));
   }
   function addEvent(kind,agentId,message) {
     const date=new Date();events.push({kind,agentId,message:String(message).slice(0,240),time:date.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',hour12:false})});
@@ -99,14 +115,21 @@ const StationThemeUI = (() => {
     snapshot=World.presentationSnapshot();if(!snapshot||!snapshot.layout)return;
     drawMap(snapshot);
     const bodies=snapshot.bodies.filter(b=>!b.unplaced);
-    el('station-overview-link').textContent=snapshot.paused?'Paused':snapshot.connected?'Local station · online':'Reconnecting to local station';
+    if(snapshot.connected&&!welcomed){welcomed=true;addEvent('system',null,'Welcome to your station.');}
+    for(const b of bodies)if(!seenBodies.has(b.id)){seenBodies.add(b.id);addEvent('agent',b.id,'On station.');}
+    const clock=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});
+    const state=snapshot.paused?'Paused':snapshot.connected?'Online':'Reconnecting';
+    el('station-overview-link').innerHTML='StarNet <span class="osrs-online">'+state+'</span> | '+clock;
+    el('osrs-station-status').innerHTML='<i aria-hidden="true">▂▅▇</i><span>'+state+'</span><time>'+clock+'</time>';
     el('station-overview-crew').textContent=bodies.length+'/'+roster.length;
     el('station-overview-working').textContent=bodies.filter(b=>b.working).length;
     el('station-overview-gear').textContent=snapshot.equipment.length;
+    el('osrs-orb-crew').textContent=bodies.length;el('osrs-orb-work').textContent=bodies.filter(b=>b.working).length;el('osrs-orb-gear').textContent=snapshot.equipment.length;el('osrs-orb-wait').textContent=bodies.filter(b=>b.waiting).length;
     const signature=bodies.map(b=>[b.id,b.name,b.working,b.waiting,b.moving,b.tool,b.role]).join('|')+roster.map(a=>[a.id,a.name,a.specialtyId,a.model]).join('|');
     if(signature!==lastSignature){lastSignature=signature;el('station-map-crew').innerHTML=bodies.map(b=>{
-      const a=roster.find(a=>a.id===b.id)||b, role=StationPresentation.roleFor(a), label=b.waiting?'Awaiting approval':b.tool?'Using '+b.tool:b.working?'Working':b.moving?'Walking':'Idle';
-      return '<button type="button" data-map-agent="'+esc(b.id)+'" class="station-crew-entry"><span class="station-npc-mark" style="--npc-color:'+role.color+'" aria-hidden="true">'+(role.kind==='mage'?'✦':role.kind==='guard'?'⚔':role.kind==='ranger'?'➶':'♟')+'</span><span><b>'+esc(b.name)+'</b><small>'+esc(role.name)+' · '+esc(label)+'</small></span><i class="'+(b.waiting?'waiting':b.working?'working':'idle')+'" aria-hidden="true"></i></button>';
+      const a=roster.find(a=>a.id===b.id)||b, role=StationPresentation.roleFor(a), label=b.waiting?'Awaiting approval':b.tool?'Using '+b.tool:b.working?'Working…':b.moving?'Walking…':'Idle';
+      const osrs=PresentationThemes.get()==='osrs',col=({mage:0,scholar:1,ranger:2,guard:3,cook:4,banker:5,elf:6,dwarf:7,scout:2,player:3})[role.kind]||0;
+      return '<button type="button" data-map-agent="'+esc(b.id)+'" class="station-crew-entry" title="'+esc(b.name+' · '+role.name+' · '+label)+'"><span class="station-npc-mark npc-'+role.kind+'" style="--npc-color:'+role.color+';--npc-col:'+col+'" aria-hidden="true">'+(role.kind==='mage'?'✦':role.kind==='guard'?'⚔':role.kind==='ranger'?'➶':'♟')+'</span><span><b>'+esc(osrs?role.npcName:b.name)+'</b><small>'+esc(osrs?label:role.name+' · '+label)+'</small></span><i class="'+(b.waiting?'waiting':b.working?'working':'idle')+'" aria-hidden="true"></i></button>';
     }).join('')||'<p class="station-feed-empty">Your crew appears here after onboarding.</p>';}
     const work=typeof Workstreams!=='undefined'&&Workstreams.all?Workstreams.all().filter(w=>w.busy):[];
     const ws=JSON.stringify(work.map(w=>[w.id,w.title,w.agentId]));
@@ -119,11 +142,13 @@ const StationThemeUI = (() => {
     g.clearRect(0,0,W,H);g.save();g.beginPath();g.arc(W/2,H/2,W/2-9,0,Math.PI*2);g.clip();
     g.fillStyle='#060b0d';g.fillRect(0,0,W,H);g.translate(ox,oy);g.scale(k,k);
     g.fillStyle=PresentationThemes.get()==='osrs'?'#5a5847':'#19364b';
-    g.strokeStyle=PresentationThemes.get()==='osrs'?'#97907a':'#427991';g.lineWidth=1/k;
+    const osrs=PresentationThemes.get()==='osrs';
+    g.strokeStyle=osrs?'#97907a33':'#427991';g.lineWidth=1/k;
     for(const r of l.floor){g.fillRect(r.x,r.y,r.w,r.h);g.strokeRect(r.x,r.y,r.w,r.h);}
     for(const p of s.equipment){g.fillStyle=p.users.length?'#c9ae55':'#818e84';g.fillRect(p.x,p.y,p.w,p.h);}
-    for(const b of s.bodies){if(b.unplaced)continue;g.beginPath();g.arc(b.x,b.y,(b.working?3.3:2.5)/k,0,Math.PI*2);g.fillStyle=b.waiting?'#e76954':b.working?'#ffdc64':'#c9dbb3';g.fill();g.strokeStyle='#282c22';g.stroke();}
-    const v=s.viewport;if(v){g.strokeStyle='#d5ca99';g.lineWidth=1/k;g.strokeRect(v.x,v.y,v.w,v.h);}
+    for(const b of s.bodies){if(b.unplaced)continue;g.beginPath();g.arc(b.x,b.y,(b.working?3.3:2.5)/k,0,Math.PI*2);g.fillStyle=b.waiting?'#e76954':b.working?'#ffdc64':osrs?'#e9d26b':'#c9dbb3';g.fill();g.strokeStyle='#282c22';g.stroke();}
+    const v=s.viewport,bounds=typeof OSRSWorld!=='undefined'?OSRSWorld.bounds(l):null;
+    if(v&&(!bounds||v.x>bounds.x||v.y>bounds.y||v.x+v.w<bounds.x+bounds.w||v.y+v.h<bounds.y+bounds.h)){g.strokeStyle='#d5ca99';g.lineWidth=1/k;g.strokeRect(v.x,v.y,v.w,v.h);}
     g.restore();g.strokeStyle=PresentationThemes.get()==='osrs'?'#887855':'#4aa7c6';g.lineWidth=5;g.beginPath();g.arc(W/2,H/2,W/2-7,0,Math.PI*2);g.stroke();
   }
   function mapClick(e) {
