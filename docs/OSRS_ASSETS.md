@@ -19,3 +19,29 @@
 The frontend fetches all assets locally; the experimental theme makes no external font or
 image requests. It does not embed or run a RuneScape client. Core capabilities, permissions,
 agent models, paths and station documents are unchanged.
+
+## Armour and reference materials revision
+
+`frontend/assets/osrs-client/armour-atlas.png` is the new original armour atlas, eight columns
+(bronze, iron, steel, black, mithril, adamant, rune, dragon) by four rows (south, west, north, east).
+Generated with the built-in image-generation tool, then copied into the project. No CLI model was
+used. Its transparent alpha is retained. The NPC/prop/traveller atlases remain available.
+
+The renderer samples the supplied reference's empty floor, stone wall/cap surfaces and hanging
+blue star banner. These are textures applied to live geometry, rather than a flattened station
+background. Minimap equipment is drawn from the same atlas as the physical station equipment.
+
+Armour generation prompt: replace the existing eight-column, four-row NPC atlas with full bronze,
+iron, steel, black, mithril, adamant, rune and dragon sets; each cell contains one slender, elevated
+orthographic OSRS-style knight wearing full helm, platebody, platelegs, gloves and boots, holding
+a kite shield and curved scimitar. Use four consistent facing directions, generous transparent
+gutters, muted matte faceted materials and the exact supplied client as style reference. Rune
+uses deep cyan-blue and dragon uses deep crimson with a swept-point helmet. No background,
+floor, text, cape, glow, baked shadow or overlapping cells.
+
+The full production prompt is preserved in `OSRS_ARMOUR_PROMPT.txt`.
+
+`frontend/assets/osrs-client/npc-atlas-v2.png` is a further reference-guided NPC art pass, using
+the built-in image-generation tool and the supplied client image. It keeps the same eight roles
+and four facing rows with clearer transparent gutters and overhead poses. The previous atlas
+is retained. Its full production prompt is preserved in `OSRS_NPC_PROMPT.txt`.

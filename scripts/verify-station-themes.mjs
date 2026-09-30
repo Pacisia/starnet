@@ -83,6 +83,14 @@ try {
   const worker = await evaluate(`App.agents().find(a=>a.name==='THEME CHECK').id`);
   await evaluate(`World.setActivityFor(${JSON.stringify(worker)},'task')`);
   await waitFor(`World.bodies().some(b=>b.id===${JSON.stringify(worker)}&&b.working&&(b.moving||b.sitting))`, 'working fixture routes to its station');
+  await evaluate(`StationThemeUI.nav('station');document.querySelector('[data-osrs-looks="'+${JSON.stringify(worker)}+'"]')?.click()`);
+  await waitFor(`document.getElementById('osrs-appearance')?.open`, 'per-agent appearance picker opens');
+  assert.equal(await evaluate(`document.getElementById('osrs-appearance-agent').value`),worker,'appearance picker selects the clicked agent');
+  assert.equal(await evaluate(`document.querySelectorAll('[data-osrs-look]').length`),19,'all NPC and full armour choices are offered');
+  assert.ok(await evaluate(`(() => {const before=__themeCheckIdentity();document.querySelector('[data-osrs-look="rune"]').click();return before===__themeCheckIdentity()&&OSRSAppearance.resolve(App.agents().find(a=>a.id===${JSON.stringify(worker)})).kind==='armour'&&World.bodies().find(b=>b.id===${JSON.stringify(worker)}).working;})()`),'rune cosmetics preserve canonical state and working behavior');
+  await waitFor(`OSRSWorld.hitRects().some(r=>r.id===${JSON.stringify(worker)}&&r.appearance==='rune'&&r.atlas==='armour')`,'live body actually draws rune armour');
+  await evaluate(`document.querySelector('[data-osrs-look="dragon"]').click();document.querySelector('.osrs-appearance-close').click()`);
+  await waitFor(`OSRSWorld.hitRects().some(r=>r.id===${JSON.stringify(worker)}&&r.appearance==='dragon')`,'live body actually draws dragon armour');
   await choose('holographic');
   assert.ok(await evaluate(`World.bodies().find(b=>b.id===${JSON.stringify(worker)}).working`), 'changing renderer preserves running body state');
   await evaluate(`World.setActivityFor(${JSON.stringify(worker)},'idle');StationUI.openTerm('settings','appearance')`);
@@ -94,14 +102,20 @@ try {
   await evaluate(`document.getElementById('comms-expand').click()`);
   await cdp.send('Page.reload');
   await waitFor(`typeof PresentationThemes!=='undefined'&&PresentationThemes.get()==='osrs'&&document.getElementById('screen-game').classList.contains('active')`, 'selected theme survives reload');
+  assert.equal(await evaluate(`OSRSAppearance.forAgent(${JSON.stringify(worker)})`),'dragon','per-agent armour survives reload independently of station state');
+  await evaluate(`OSRSAppearanceUI.open(${JSON.stringify(worker)});document.querySelector('[data-osrs-look="role"]').click();document.querySelector('.osrs-appearance-close').click()`);
+  assert.equal(await evaluate(`OSRSAppearance.forAgent(${JSON.stringify(worker)})`),'role','role default is a reversible cosmetic reset');
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
   await sleep(1200);
   assert.ok(await evaluate(`(() => {const input=document.getElementById('chat-input').getBoundingClientRect(),dock=document.getElementById('bottombar').getBoundingClientRect(),stage=document.getElementById('stage').getBoundingClientRect();return input.width>100&&input.top>stage.bottom&&dock.bottom<=innerHeight+1&&document.documentElement.scrollWidth<=innerWidth;})()`), 'phone retains usable composer, station and dock');
   assert.ok(await evaluate(`getComputedStyle(document.getElementById('chat-inputrow')).backgroundColor==='rgb(202, 188, 151)'`), 'OSRS composer uses a readable parchment surface');
+  await evaluate(`document.querySelector('.osrs-looks-button').click()`);
+  assert.ok(await evaluate(`(() => {const d=document.getElementById('osrs-appearance'),r=d.getBoundingClientRect();return d.open&&r.left>=0&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1&&d.scrollWidth<=d.clientWidth;})()`),'appearance picker stays usable on a phone');
   await choose('original');
+  assert.ok(await evaluate(`!document.getElementById('osrs-appearance').open`),'returning to Original closes the theme-specific picker');
   assert.ok(await evaluate(`getComputedStyle(document.getElementById('station-game-overview')).display==='none'&&!document.getElementById('chat-panel').classList.contains('station-activity-selected')`), 'original restores native UI');
   assert.deepEqual(errors, [], 'no browser exceptions');
-  console.log('station-themes browser: all four renderers, state preservation, perspective NPC and equipment picking, minimap clicks, event filters, working state, Settings, persistence, expanded conversation and 390px layout passed; no provider calls');
+  console.log('station-themes browser: four renderers, unchanged canonical state, NPC/equipment picking, live rune/dragon armour on a working agent, per-agent persistence/reset, activity, Settings and phone layout passed; no provider calls');
 } finally {
   if (cdp) { try { await cdp.send('Browser.close'); } catch {} }
   for (const p of [chrome, server]) { if (p && p.exitCode == null) p.kill('SIGKILL'); }

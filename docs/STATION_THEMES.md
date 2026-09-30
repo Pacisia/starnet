@@ -76,6 +76,8 @@ or purpose text. The OSRS revision uses generated sprite atlases with four facin
 including distinct traveller and operator art; other experimental themes retain their procedural
 art. The supplied image provides decorative client framing and icons. The station scene,
 NPC locations, equipment, minimap, counts and activity are rendered from live state.
+The current revision also samples empty stone surfaces and banners from the supplied reference,
+projects them onto canonical floor/wall geometry and caches terrain and sprite colour grading.
 The source image's fixed values, agents and progress messages are never used as live telemetry.
 See `OSRS_ASSETS.md` for asset provenance and the bundled font license.
 
@@ -105,6 +107,22 @@ agent/model/attachment/voice controls; they also appear when the composer receiv
 The compact layout retains the live world, a small minimap, conversation and all existing dock
 menus on narrow screens. Expanded conversation mode still uses the original conversation.
 
+## Per-agent NPCs and armour
+
+**NPCs & armour** in the OSRS header opens a keyboard-accessible appearance picker. The small
+appearance button beside each crew member opens it for that agent; dossiers opened through the
+minimap/crew also expose Appearance. Choose any of the ten role archetypes or full bronze, iron,
+steel, black, mithril, adamant, rune or dragon armour. Each armour includes a full helm, platebody,
+platelegs, shield and scimitar in four facing directions. **Follow role** restores the default.
+
+`osrs-appearance.js` owns a validated cosmetic catalog and the separate local preference
+`starnet.osrs.appearances.v1`, indexed by stable agent ID. `osrs-appearance-ui.js` owns the dialog.
+Neither changes canonical skins, specialties, models, capabilities, paths, tasks or station saves.
+An armoured research agent remains a research agent. Labels retain the actual role, the sidebar
+portrait matches the current look, and changes take effect on the existing moving body. Preferences
+persist for the browser/app origin and synchronize across windows. Original and the other themes
+continue to use their original art. The original character atlases are retained.
+
 ## Rollback and parallel use
 
 The default branch is never overwritten or merged by this experiment. Keep the original
@@ -118,7 +136,21 @@ experimental checkout to the baseline branch/commit. No station migration is nee
 
 ## Verification
 
-Passed on the isolated copy:
+The previous complete browser pass was at commit `c83f238`; it validated the four original
+presentations before this armour/material revision. Current validation:
+
+- 16 focused headless suites passed for cosmetic/theme isolation, world model, native body clicks,
+  character rendering, settings, station authority, containment, seating, approval and movement.
+- Direct execution of the actual `OSRSWorld` renderer against immutable seeded state validated
+  the loaded atlases, rune/dragon body draws, and all 684 agent × appearance × facing sprite
+  combinations. Renderer previews are explicitly identified; they are not live app screenshots.
+- The expanded `scripts/verify-station-themes.mjs` checks rune and dragon on a working agent,
+  unchanged canonical data, per-agent reload/reset and a phone-size appearance picker. It could
+  not run this turn: Chrome requires local IPC sockets that this execution policy blocks, and
+  escalated execution was rejected. Do not treat the new browser checks as passed.
+- Website mirror synchronization and `git diff --check` passed.
+
+Earlier browser validation (before this revision):
 
 - `node test/presentation-themes.test.js`: preference isolation, invalid storage, role identity,
   frozen render inputs, native fallback, sleeping pose and reduced motion.
@@ -149,3 +181,6 @@ four themes, Settings, the minimap, agent dossiers, real event projection, expan
 conversation, return to Original, persistence after reload and a narrow viewport. The
 seed has placeholder credentials: it exercises the real local app without making paid model
 calls. It does not certify an actual provider run or desktop packaging on iPhone/Windows/macOS.
+
+A graphics-only rollback branch is `rollback/pre-armour-and-reference-c83f238`, retaining the
+previous OSRS client. The new material/cosmetic preferences require no station migration.

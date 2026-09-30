@@ -2,28 +2,56 @@
    World. This pass paints a perspective view AFTER the native simulation/transport work has run. */
 'use strict';
 const OSRSWorld = (() => {
-  const COLS = {mage:0,scholar:1,ranger:2,guard:3,cook:4,banker:5,elf:6,dwarf:7,scout:2,player:3};
   const assets = {}, rects = {}, hitRects = [], labels=[];
-  let view = null, baseline = null, lookup = () => null;
+  let view = null, baseline = null, terrain = null, lookup = () => null;
+  const WALL_HEIGHT=31, WALL_THICKNESS=6.5, FLOOR_DEPTH=.80;
+  function alphaBounds(data,stride,left,top,w,h) {
+    const visited=new Uint8Array(w*h),queue=new Int32Array(w*h),components=[];
+    const opaque=(x,y)=>data[((top+y)*stride+left+x)*4+3]>40;
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+      const start=y*w+x;if(visited[start]||!opaque(x,y))continue;
+      let head=0,tail=1;queue[0]=start;visited[start]=1;
+      const box={x0:x,y0:y,x1:x,y1:y,size:0};
+      while(head<tail){const i=queue[head++],px=i%w,py=Math.floor(i/w);box.size++;
+        box.x0=Math.min(box.x0,px);box.x1=Math.max(box.x1,px);box.y0=Math.min(box.y0,py);box.y1=Math.max(box.y1,py);
+        for(const n of [px>0?i-1:-1,px+1<w?i+1:-1,py>0?i-w:-1,py+1<h?i+w:-1]){
+          if(n>=0&&!visited[n]&&opaque(n%w,Math.floor(n/w))){visited[n]=1;queue[tail++]=n;}
+        }
+      }components.push(box);
+    }
+    components.sort((a,b)=>b.size-a.size);
+    const main=components[0]||{x0:0,y0:0,x1:w-1,y1:h-1,size:1},out={...main};
+    // Trim stray fragments from an adjacent atlas cell while retaining nearby held gear.
+    for(const c of components.slice(1)){
+      const gap=Math.hypot(Math.max(0,main.x0-c.x1,c.x0-main.x1),Math.max(0,main.y0-c.y1,c.y0-main.y1));
+      if(c.size>=main.size*.012&&gap<Math.min(w,h)*.065){out.x0=Math.min(out.x0,c.x0);out.y0=Math.min(out.y0,c.y0);out.x1=Math.max(out.x1,c.x1);out.y1=Math.max(out.y1,c.y1);}
+    }
+    return {x:left+out.x0,y:top+out.y0,w:out.x1-out.x0+1,h:out.y1-out.y0+1};
+  }
   const active = () => typeof PresentationThemes !== 'undefined' && PresentationThemes.get() === 'osrs';
   function load(name, path, columns, rows) {
     if (typeof Image === 'undefined') return;
     const image = new Image(); assets[name] = image;
     image.onload = () => {
       const c=document.createElement('canvas');c.width=image.width;c.height=image.height;
-      const g=c.getContext('2d');g.drawImage(image,0,0);const data=g.getImageData(0,0,c.width,c.height).data;
-      const w=image.width/columns,h=image.height/rows;rects[name]=[];
+      const g=c.getContext('2d');
+      // Grade once, so moving NPCs never require an image filter/composite on every frame.
+      g.filter=name==='props'?'brightness(.82) saturate(.72)':'brightness(.86) saturate(.78)';
+      g.drawImage(image,0,0);g.filter='none';assets[name]=c;
+      const data=g.getImageData(0,0,c.width,c.height).data;
+      rects[name]=[];
       // Asset-bound scanning is done once at load, never a frame-loop pixel readback.
       for(let row=0;row<rows;row++)for(let col=0;col<columns;col++){
-        let x0=w,y0=h,x1=0,y1=0;
-        for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(data[((row*h+y)*c.width+col*w+x)*4+3]>40){x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y);}
-        rects[name].push({x:col*w+x0,y:row*h+y0,w:Math.max(1,x1-x0+1),h:Math.max(1,y1-y0+1)});
+        const x=Math.floor(col*image.width/columns),y=Math.floor(row*image.height/rows),w=Math.floor((col+1)*image.width/columns)-x,h=Math.floor((row+1)*image.height/rows)-y;
+        rects[name].push(alphaBounds(data,c.width,x,y,w,h));
       }
     };image.src=path;
   }
-  load('npc','assets/osrs-client/npc-atlas.png',8,4);
+  load('npc','assets/osrs-client/npc-atlas-v2.png',8,4);
   load('travellers','assets/osrs-client/traveller-atlas.png',4,2);
+  load('armour','assets/osrs-client/armour-atlas.png',8,4);
   load('props','assets/osrs-client/prop-atlas.png',4,2);
+  if(typeof Image!=='undefined'){assets.material=new Image();assets.material.src='assets/osrs-client/reference.jpg';}
   function bounds(layout) {
     const f=layout.floor;
     if(!f.length)return {x:0,y:0,w:layout.width,h:layout.height};
@@ -31,33 +59,63 @@ const OSRSWorld = (() => {
     return {x,y,w:Math.max(...f.map(r=>r.x+r.w))-x,h:Math.max(...f.map(r=>r.y+r.h))-y};
   }
   function makeView(layout, width, height, zoom, center) {
-    const b=bounds(layout),scale=Math.min((width-22)/(b.w*1.18+20),(height-16)/(b.h*.9+38))*Math.max(.1,zoom||1);
-    return {b,width,height,scale,cx:b.x+b.w/2,cy:b.y+b.h/2,
-      ox:width/2,oy:height/2+10*scale,center:center||{x:b.x+b.w/2,y:b.y+b.h/2}};
+    const b=bounds(layout),v={b,width,height,cx:b.x+b.w/2,cy:b.y+b.h/2,center:center||{x:b.x+b.w/2,y:b.y+b.h/2}};
+    let edges=edgesCache.get(layout);if(!edges){edges=outerEdges(layout);edgesCache.set(layout,edges);}
+    const points=[];
+    for(const [near,list] of [[false,edges.far],[true,edges.near]])for(const [a,c] of list){
+      const len=Math.hypot(c.x-a.x,c.y-a.y)||1,dx=(c.y-a.y)/len*WALL_THICKNESS,dy=-(c.x-a.x)/len*WALL_THICKNESS;
+      for(const p of [a,c]){points.push(local(v,p.x,p.y,near?-4:0),local(v,p.x+dx,p.y+dy,near?5:WALL_HEIGHT));}
+    }
+    if(!points.length)points.push(local(v,b.x,b.y,0),local(v,b.x+b.w,b.y+b.h,0));
+    const xs=points.map(p=>p.x),ys=points.map(p=>p.y),x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+    v.scale=Math.min((width-16)/Math.max(1,x1-x0),(height-12)/Math.max(1,y1-y0))*Math.max(.1,zoom||1);
+    v.ox=width/2-(x0+x1)/2*v.scale;v.oy=height/2-(y0+y1)/2*v.scale;return v;
   }
-  function local(v,x,y,z) {return {x:(x-v.cx)*(.83+.34*(y-v.b.y)/Math.max(1,v.b.h)),y:(y-v.cy)*.9-(z||0)};}
+  function breadth(v,y){return 1.06+.29*(y-v.b.y)/Math.max(1,v.b.h);}
+  function local(v,x,y,z) {return {x:(x-v.cx)*breadth(v,y),y:(y-v.cy)*FLOOR_DEPTH-(z||0)};}
   function project(v,x,y,z) {const p=local(v,x,y,z),c=local(v,v.center.x,v.center.y,0);return {x:v.ox+(p.x-c.x)*v.scale,y:v.oy+(p.y-c.y)*v.scale};}
-  function unproject(v,x,y) {const c=local(v,v.center.x,v.center.y,0),wy=v.cy+((y-v.oy)/v.scale+c.y)/.9;
-    return {x:v.cx+((x-v.ox)/v.scale+c.x)/(.83+.34*(wy-v.b.y)/Math.max(1,v.b.h)),y:wy};}
+  function unproject(v,x,y) {const c=local(v,v.center.x,v.center.y,0),wy=v.cy+((y-v.oy)/v.scale+c.y)/FLOOR_DEPTH;
+    return {x:v.cx+((x-v.ox)/v.scale+c.x)/breadth(v,wy),y:wy};}
   function polygon(g,points,fill,stroke,width) {
     g.beginPath();points.forEach((p,i)=>i?g.lineTo(p.x,p.y):g.moveTo(p.x,p.y));g.closePath();g.fillStyle=fill;g.fill();
     if(stroke){g.strokeStyle=stroke;g.lineWidth=width||.6;g.stroke();}
   }
   function quad(g,v,x,y,w,h,z,fill,stroke){polygon(g,[[x,y],[x+w,y],[x+w,y+h],[x,y+h]].map(([a,b])=>project(v,a,b,z)),fill,stroke);}
   function face(g,v,a,b,z0,z1,color){polygon(g,[project(v,a.x,a.y,z0),project(v,b.x,b.y,z0),project(v,b.x,b.y,z1),project(v,a.x,a.y,z1)],color,'#39382f',.65);}
+  function imageQuad(g,points,source){
+    const image=assets.material;if(!image?.complete||!image.naturalWidth)return false;
+    const [a,b,c,d]=points,[sx,sy,sw,sh]=source;
+    for(const [p,q,r,second]of [[a,b,c,false],[c,d,a,true]]){
+      g.save();g.beginPath();g.moveTo(p.x,p.y);g.lineTo(q.x,q.y);g.lineTo(r.x,r.y);g.closePath();g.clip();
+      if(!second)g.transform((b.x-a.x)/sw,(b.y-a.y)/sw,(c.x-b.x)/sh,(c.y-b.y)/sh,a.x,a.y);
+      else g.transform((c.x-d.x)/sw,(c.y-d.y)/sw,(d.x-a.x)/sh,(d.y-a.y)/sh,a.x,a.y);
+      g.drawImage(image,sx,sy,sw,sh,0,0,sw,sh);g.restore();
+    }return true;
+  }
   function wall(g,v,a,b,near,index) {
-    const H=near?7:26;
-    face(g,v,a,b,near?-7:0,H,near?'#676659':'#514f43');
-    const n=Math.max(1,Math.round(Math.hypot(a.x-b.x,a.y-b.y)/10));
-    for(let row=0;row<(near?2:4);row++)for(let i=0;i<n;i++){
-      const t=i/n,u=(i+1)/n,p={x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t},q={x:a.x+(b.x-a.x)*u,y:a.y+(b.y-a.y)*u};
-      const hash=((index*19+i*23+row*43)%19)/19,base=near?91:70;
-      face(g,v,p,q,near?-7+row*7:row*6,H/(near?2:4)+ (near?-7+row*7:row*6),`rgb(${base+hash*12|0},${base+hash*11|0},${base-8+hash*10|0})`);
-      const pa=project(v,p.x,p.y,near?0:row*6+5);const pb=project(v,q.x,q.y,near?0:row*6+5);
-      g.strokeStyle='#928a703a';g.lineWidth=.55;g.beginPath();g.moveTo(pa.x+2,pa.y);g.lineTo(pb.x-2,pb.y);g.stroke();
+    const H=near?5:WALL_HEIGHT,low=near?-4:0,rows=near?2:4,step=(H-low)/rows;
+    face(g,v,a,b,low,H,near?'#686762':'#595750');
+    const n=Math.max(1,Math.round(Math.hypot(a.x-b.x,a.y-b.y)/15));
+    for(let row=0;row<rows;row++)for(let i=-1;i<n;i++){
+      const offset=row%2?.5:0,t=Math.max(0,(i+offset)/n),u=Math.min(1,(i+1+offset)/n);if(u<=t)continue;
+      const p={x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t},q={x:a.x+(b.x-a.x)*u,y:a.y+(b.y-a.y)*u};
+      const hash=((index*19+i*23+row*43+137)%19)/19,base=near?86:66,z0=low+row*step,z1=z0+step;
+      face(g,v,p,q,z0,z1,`rgb(${base+hash*18|0},${base+hash*17|0},${base-5+hash*17|0})`);
+      g.save();g.globalAlpha=.42;imageQuad(g,[project(v,p.x,p.y,z1-.3),project(v,q.x,q.y,z1-.3),project(v,q.x,q.y,z0+.3),project(v,p.x,p.y,z0+.3)],[544,710,80,12]);g.restore();
+      const pa=project(v,p.x,p.y,z1),pb=project(v,q.x,q.y,z1);
+      g.strokeStyle='#d6d1ba30';g.lineWidth=.7;g.beginPath();g.moveTo(pa.x+1,pa.y+1);g.lineTo(pb.x-1,pb.y+1);g.stroke();
+      if(hash>.62){const m=project(v,p.x+(q.x-p.x)*.7,p.y+(q.y-p.y)*.7,z0+step*.54);
+        g.strokeStyle='#b8b09930';g.beginPath();g.moveTo(m.x-3*v.scale,m.y);g.lineTo(m.x+2*v.scale,m.y-.25*v.scale);g.stroke();}
     }
-    const dx=(b.y-a.y),dy=-(b.x-a.x),len=Math.hypot(dx,dy)||1,th=4;
-    polygon(g,[project(v,a.x,a.y,H),project(v,b.x,b.y,H),project(v,b.x+dx/len*th,b.y+dy/len*th,H),project(v,a.x+dx/len*th,a.y+dy/len*th,H)],'#929083','#55564c');
+    const dx=(b.y-a.y),dy=-(b.x-a.x),len=Math.hypot(dx,dy)||1,th=WALL_THICKNESS;
+    for(let i=0;i<n;i++){
+      const p={x:a.x+(b.x-a.x)*i/n,y:a.y+(b.y-a.y)*i/n},q={x:a.x+(b.x-a.x)*(i+1)/n,y:a.y+(b.y-a.y)*(i+1)/n},shade=130+(i*13+index*7)%18;
+      const cap=[project(v,p.x,p.y,H),project(v,q.x,q.y,H),project(v,q.x+dx/len*th,q.y+dy/len*th,H),project(v,p.x+dx/len*th,p.y+dy/len*th,H)];
+      polygon(g,cap,`rgb(${shade},${shade-2},${shade-8})`,'#4d4c48',.8);
+      g.save();g.globalAlpha=.78;imageQuad(g,cap,[538,698,80,7]);g.restore();
+    }
+    const pa=project(v,a.x+dx/len*th,a.y+dy/len*th,H),pb=project(v,b.x+dx/len*th,b.y+dy/len*th,H);
+    g.strokeStyle='#c6c1ae88';g.lineWidth=.75;g.beginPath();g.moveTo(pa.x,pa.y);g.lineTo(pb.x,pb.y);g.stroke();
   }
   function outerEdges(layout) {
     const T=layout.tileSize,tiles=new Set(),raw=[],far=[],near=[],loops=[];
@@ -110,9 +168,10 @@ const OSRSWorld = (() => {
     }g.restore();return true;
   }
   function star(g,x,y,r,color) {const p=[];for(let i=0;i<16;i++){const a=i*Math.PI/8-Math.PI/2,n=i%4===0?r:i%2===0?r*.62:r*.18;p.push({x:x+Math.cos(a)*n,y:y+Math.sin(a)*n});}polygon(g,p,color,'#796224',.7);}
-  function banner(g,v,x,y) {const p=project(v,x,y,25),s=v.scale;
-    polygon(g,[{x:p.x-5*s,y:p.y},{x:p.x+5*s,y:p.y},{x:p.x+5*s,y:p.y+19*s},{x:p.x,y:p.y+16*s},{x:p.x-5*s,y:p.y+19*s}],'#233950','#858070');
-    star(g,p.x,p.y+8*s,4.5*s,'#b99d46');g.strokeStyle='#a29059';g.lineWidth=1;g.beginPath();g.moveTo(p.x-7*s,p.y);g.lineTo(p.x+7*s,p.y);g.stroke();
+  function banner(g,v,x,y) {const p=project(v,x,y,29),s=v.scale;
+    if(assets.material?.complete&&assets.material.naturalWidth){g.drawImage(assets.material,689,110,44,95,p.x-5.4*s,p.y,10.8*s,23.3*s);return;}
+    polygon(g,[{x:p.x-5*s,y:p.y},{x:p.x+5*s,y:p.y},{x:p.x+5*s,y:p.y+23*s},{x:p.x,y:p.y+20*s},{x:p.x-5*s,y:p.y+23*s}],'#233950','#858070');
+    star(g,p.x,p.y+10*s,4.5*s,'#b99d46');
   }
   function torch(g,v,x,y,now,still) {const p=project(v,x,y,18),s=v.scale;
     g.strokeStyle='#42341e';g.lineWidth=2*s;g.beginPath();g.moveTo(p.x,p.y+6*s);g.lineTo(p.x,p.y);g.stroke();
@@ -127,17 +186,17 @@ const OSRSWorld = (() => {
     if(p.capability==='workbench')return 1;if(p.capability==='notebook')return 5;
     if(p.capability==='studio')return 1;if(p.capability==='computer'){
       const role=typeof StationPresentation!=='undefined'?StationPresentation.roleFor(lookup(p.agentId)):null;
-      return role&&['mage','scholar'].includes(role.kind)?4:role&&role.kind==='dwarf'?1:0;
+      return role&&role.kind==='dwarf'?1:0;
     }return null;
   }
   function drawProp(g,v,p) {
     const foot=project(v,p.x+p.w/2,p.y+p.h*.78),index=propIndex(p),r=rects.props&&rects.props[index];
-    const near=.83+.34*(p.y-v.b.y)/Math.max(1,v.b.h);
-    let w=Math.max(10,p.w*1.10)*v.scale*near,h=index===3?35*v.scale: index===2||index===5?27*v.scale:Math.min(28,Math.max(16,p.w*.9))*v.scale;
+    const near=breadth(v,p.y);
+    let w=Math.max(10,p.w*1.05)*v.scale*near,h=index===3?37*v.scale: index===2||index===5?29*v.scale:Math.min(30,Math.max(17,p.w*.9))*v.scale;
     if(index===7){w=12*v.scale;h=23*v.scale;}
     if(r&&index!=null){w=Math.min(w,h*r.w/r.h*1.2);h=w*r.h/r.w;
-      g.save();g.fillStyle='#17150e42';g.beginPath();g.ellipse(foot.x+3*v.scale,foot.y,w*.36,3*v.scale,.05,0,Math.PI*2);g.fill();g.restore();
-      sprite(g,'props',index,foot.x,foot.y,w,h,false,0,true);
+      g.save();g.fillStyle='#17150e32';g.beginPath();g.ellipse(foot.x+2*v.scale,foot.y,w*.34,1.8*v.scale,.05,0,Math.PI*2);g.fill();
+      sprite(g,'props',index,foot.x,foot.y,w,h,false,0,true);g.restore();
     }else{
       // Unknown future equipment stays identifiable and clickable instead of vanishing.
       const a=project(v,p.x,p.y+p.h),b=project(v,p.x+p.w,p.y+p.h);face(g,v,{x:p.x,y:p.y+p.h},{x:p.x+p.w,y:p.y+p.h},0,8,'#78674a');
@@ -147,24 +206,23 @@ const OSRSWorld = (() => {
     hitRects.push({kind:'equipment',id:p.id,wx:p.x+p.w/2,wy:p.y+p.h/2,x:foot.x-w/2,y:foot.y-h,w,h});
   }
   function drawBody(g,v,b,now,still) {
-    const record=lookup(b.id)||b,role=StationPresentation.roleFor(record),col=COLS[role.kind]??2;
-    const row=({south:0,southwest:1,west:1,northwest:2,north:2,northeast:3,east:3,southeast:0})[b.dir]??0;
-    const kind=['scout','player'].includes(role.kind)?'travellers':'npc',index=kind==='travellers'?(role.kind==='scout'?4:0)+row:row*8+col,r=rects[kind]&&rects[kind][index];
-    const p=project(v,b.x,b.y),n=.83+.34*(b.y-v.b.y)/Math.max(1,v.b.h);
-    const fullH=(role.kind==='dwarf'?27:33)*v.scale*n,fullW=r?fullH*r.w/r.h:fullH*.44;
+    const record=lookup(b.id)||b,role=StationPresentation.roleFor(record),spec=OSRSAppearance.sprite(record,b.dir),kind=spec.atlas,index=spec.index,r=rects[kind]&&rects[kind][index];
+    const p=project(v,b.x,b.y),n=.92+.10*(b.y-v.b.y)/Math.max(1,v.b.h);
+    const fullH=(spec.look.kind==='dwarf'?27:33)*v.scale*n,fullW=r?fullH*r.w/r.h:fullH*.44;
     const h=b.lying?fullW:b.sitting?fullH*.78:fullH,w=b.lying?fullH:fullW;
-    g.fillStyle='#15171055';g.beginPath();g.ellipse(p.x,p.y,5*v.scale*n,1.8*v.scale*n,0,0,Math.PI*2);g.fill();
+    g.fillStyle='#15171040';g.beginPath();g.ellipse(p.x+v.scale,p.y,4.5*v.scale*n,1.3*v.scale*n,0,0,Math.PI*2);g.fill();
     let painted=false;
+    g.save();
     if(b.lying&&r){g.save();g.translate(p.x,p.y-fullW*.5);g.rotate(Math.PI/2);painted=sprite(g,kind,index,0,fullH*.5,fullW,fullH,false,0,true);g.restore();}
     else painted=sprite(g,kind,index,p.x,p.y,w,h,b.moving,b.odo,still,b.sitting);
-    if(!painted){
+    g.restore();if(!painted){
       g.save();g.translate(p.x,p.y);g.scale(v.scale*n,v.scale*n);StationPresentation.drawBody(g,{...b,px:0,py:0},now,{reducedMotion:still});g.restore();
     }
     if(b.working&&!b.lying){g.fillStyle='#b0cc89';const pulse=still?1:.7+.3*Math.sin(now/180);g.globalAlpha=pulse;g.fillRect(p.x+w*.4,p.y-h*.45,2*v.scale,1.5*v.scale);g.globalAlpha=1;}
     if(b.waiting){g.fillStyle='#d55839';g.beginPath();g.arc(p.x,p.y-h-8,3,0,Math.PI*2);g.fill();}
     const font=Math.max(12,Math.min(17,v.scale*4.5));g.font=`${font}px OSRSBold,monospace`;g.textAlign='left';g.textBaseline='bottom';g.lineWidth=3;g.strokeStyle='#15150e';
-    labels.push({b,role,p,w,h,font,text:role.npcName||role.name,sub:role.job||b.name});
-    hitRects.push({kind:'agent',id:b.id,wx:b.x,wy:b.y,x:p.x-w/2,y:p.y-h,w,h});
+    labels.push({b,role,p,w,h,font,text:spec.look.npcName,sub:role.job||b.name});
+    hitRects.push({kind:'agent',id:b.id,appearance:spec.look.id,atlas:kind,spriteIndex:index,wx:b.x,wy:b.y,x:p.x-w/2,y:p.y-h,w,h});
   }
   function drawLabels(g,v){
     const occupied=[];
@@ -187,6 +245,42 @@ const OSRSWorld = (() => {
       hitRects.push({kind:'agent',id:b.id,wx:b.x,wy:b.y,...r});
     }
   }
+  function textureQuad(g,v,x,y,T) {
+    // Two affine triangles place the reference's empty stone surface onto the live floor.
+    return imageQuad(g,[[x,y],[x+T,y],[x+T,y+T],[x,y+T]].map(([a,b])=>project(v,a,b)),[756,454,64,64]);
+  }
+  function drawTerrain(g,v,s,e){
+    const loaded=!!assets.material?.naturalWidth,key=[v.width,v.height,v.scale,v.center.x,v.center.y,loaded].join(':');
+    if(!terrain||terrain.key!==key||terrain.layout!==s.layout){
+      const c=document.createElement('canvas');c.width=v.width;c.height=v.height;const t=c.getContext('2d'),T=s.layout.tileSize;
+      t.save();t.beginPath();for(const points of e.loops){points.forEach((p,i)=>{const q=project(v,p.x,p.y);i?t.lineTo(q.x,q.y):t.moveTo(q.x,q.y);});t.closePath();}t.clip('evenodd');
+      t.fillStyle='#69665c';t.fillRect(0,0,c.width,c.height);
+      for(const row of s.layout.floor)for(let x=row.x;x<row.x+row.w;x+=T){
+        const h=((x*73+row.y*31)%23)/23;
+        if(!textureQuad(t,v,x,row.y,T))quad(t,v,x,row.y,T,T,0,`rgb(${99+h*13|0},${96+h*13|0},${87+h*11|0})`);
+        quad(t,v,x,row.y,T,T,0,`rgba(25,22,16,${.025+h*.045})`,'#45443c16');
+      }
+      // The back walls cast a broad contact shadow into the actual room boundary.
+      for(const [a,b] of e.far){const p=project(v,a.x,a.y),q=project(v,b.x,b.y);t.strokeStyle='#23211727';t.lineWidth=5*v.scale;t.beginPath();t.moveTo(p.x,p.y);t.lineTo(q.x,q.y);t.stroke();}
+      t.restore();e.far.forEach(([a,b],i)=>wall(t,v,a,b,false,i));
+      const b=bounds(s.layout);banner(t,v,b.x+b.w*.52,b.y);banner(t,v,b.x+b.w*.78,b.y);
+      const front=document.createElement('canvas');front.width=v.width;front.height=v.height;
+      e.near.forEach(([a,b],i)=>wall(front.getContext('2d'),v,a,b,true,i));
+      terrain={key,layout:s.layout,canvas:c,front};
+    }g.drawImage(terrain.canvas,0,0);
+  }
+  function drawPortrait(canvas,record,override){
+    const g=canvas.getContext('2d'),spec=OSRSAppearance.sprite(record,'south',override),r=rects[spec.atlas]?.[spec.index];
+    g.clearRect(0,0,canvas.width,canvas.height);if(!r)return false;
+    const k=Math.min((canvas.width-4)/r.w,(canvas.height-4)/r.h);g.imageSmoothingEnabled=true;
+    g.drawImage(assets[spec.atlas],r.x,r.y,r.w,r.h,(canvas.width-r.w*k)/2,canvas.height-r.h*k-2,r.w*k,r.h*k);return true;
+  }
+  function spriteBounds(record,dir,override){const spec=OSRSAppearance.sprite(record,dir,override),r=rects[spec.atlas]?.[spec.index];return r?{...r,atlas:spec.atlas,index:spec.index}:null;}
+  function drawMapEquipment(g,p){
+    const index=propIndex(p),r=rects.props?.[index];if(!r||index==null)return false;
+    const w=Math.max(9,p.w),h=w*r.h/r.w;g.drawImage(assets.props,r.x,r.y,r.w,r.h,p.x+p.w/2-w/2,p.y+p.h*.85-h,w,h);
+    if(p.users.length){g.strokeStyle='#edcb65';g.lineWidth=1.4;g.strokeRect(p.x-.5,p.y-.5,p.w+1,p.h+1);}return true;
+  }
   function draw(g,canvas,frame) {
     if(!active()||!frame.snapshot||!frame.snapshot.layout.floor.length)return false;
     const s=frame.snapshot,W=canvas.width,H=canvas.height;
@@ -199,22 +293,14 @@ const OSRSWorld = (() => {
     for(let i=0;i<125;i++){const x=(i*377+71)%W,y=(i*719+47)%H;g.fillStyle=i%7?'#c8c6c46a':'#ddc385';g.fillRect(x,y,i%7?.6:1.1,.7);}
     const T=s.layout.tileSize;
     let e=edgesCache.get(s.layout);if(!e){e=outerEdges(s.layout);edgesCache.set(s.layout,e);}
-    g.save();g.beginPath();for(const points of e.loops){points.forEach((p,i)=>{const q=project(view,p.x,p.y);i?g.lineTo(q.x,q.y):g.moveTo(q.x,q.y);});g.closePath();}g.clip('evenodd');
-    g.fillStyle='#655f4d';g.fillRect(0,0,W,H);
-    for(const row of s.layout.floor)for(let x=row.x;x<row.x+row.w;x+=T){const h=((x*73+row.y*31)%23)/23;
-      quad(g,view,x,row.y,T,T,0,`rgb(${99+h*13|0},${94+h*13|0},${78+h*11|0})`,'#6b665548');
-      for(let k=0;k<3;k++){const q=project(view,x+2+((x+k*31)%8),row.y+2+((row.y+k*43)%8));g.fillStyle=k%2?'#4f4c3b28':'#b4a98424';g.fillRect(q.x,q.y,.55*view.scale,.3*view.scale);}
-    }
-    g.restore();
-    e.far.forEach(([a,b],i)=>wall(g,view,a,b,false,i));
-    banner(g,view,b.x+b.w*.28,b.y);banner(g,view,b.x+b.w*.70,b.y);
-    torch(g,view,b.x+b.w*.08,b.y,frame.now,frame.reducedMotion);torch(g,view,b.x+b.w*.88,b.y,frame.now,frame.reducedMotion);
+    drawTerrain(g,view,s,e);
+    torch(g,view,b.x+b.w*.26,b.y,frame.now,frame.reducedMotion);torch(g,view,b.x+b.w*.67,b.y,frame.now,frame.reducedMotion);
     for(const belt of s.layout.belts||[])quad(g,view,belt.x,belt.y,T,T,.1,'#524c3b','#b09a57');
     const items=s.equipment.map(p=>({y:p.y+p.h,draw:()=>drawProp(g,view,p)}));
     for(const body of s.bodies)if(!body.unplaced)items.push({y:body.y,draw:()=>drawBody(g,view,body,frame.now,frame.reducedMotion)});
     items.sort((a,b)=>a.y-b.y).forEach(i=>i.draw());
     for(const box of s.transports||[])quad(g,view,box.x-2,box.y-2,4,4,4,'#b1985a','#403b27');
-    e.near.forEach(([a,b],i)=>wall(g,view,a,b,true,i));
+    g.drawImage(terrain.front,0,0);
     drawLabels(g,view);
     if(!s.connected){g.fillStyle='#f2c882';g.font='17px OSRSBold';g.fillText('Station connection interrupted',12,24);}
     g.restore();return true;
@@ -224,9 +310,9 @@ const OSRSWorld = (() => {
   function clientToWorld(e,canvas) {if(!active()||!view)return null;const p=pointFromClient(e,canvas),hit=hitPoint(p.x,p.y);return hit?{x:hit.wx,y:hit.wy}:unproject(view,p.x,p.y);}
   function worldToCanvas(x,y) {return active()&&view?project(view,x,y):null;}
   function clientHit(e,canvas) {if(!active()||!view)return null;const p=pointFromClient(e,canvas);return hitPoint(p.x,p.y);}
-  function reset(){view=null;baseline=null;hitRects.length=0;}
+  function reset(){view=null;baseline=null;terrain=null;hitRects.length=0;}
   return {active,draw,reset,bind:fn=>{lookup=fn||(()=>null);},clientToWorld,worldToCanvas,clientHit,makeView,project,unproject,propIndex,
-    ready:()=>!!(rects.npc&&rects.props&&rects.travellers),hitRects:()=>hitRects.map(r=>({...r})),bounds,outline:outerEdges};
+    ready:()=>!!(rects.npc&&rects.props&&rects.travellers&&rects.armour),drawPortrait,drawMapEquipment,spriteBounds,alphaBounds,hitRects:()=>hitRects.map(r=>({...r})),bounds,outline:outerEdges};
 })();
 if(typeof StationPresentation!=='undefined')StationPresentation.registerView('osrs',OSRSWorld);
 if(typeof module!=='undefined'&&module.exports)module.exports=OSRSWorld;
