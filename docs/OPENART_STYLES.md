@@ -38,14 +38,21 @@ every outfit. Portrait crops follow each concept's actual row positions. These a
 definitions; they do not write an appearance, model or role back into the roster.
 
 `OpenArtWorld` registers five complete views through the existing `StationPresentation` API.
-It shares the perspective projection and outline helpers, consumes the immutable station
-snapshot, and renders real rooms, equipment footprints, ownership, crew positions and activity.
+It shares the station projection and outline helpers, consumes the immutable station snapshot,
+and renders real rooms, corridors, equipment footprints, ownership, crew positions and activity.
+The current correction uses the native floor mask exactly, including holes and expanded rooms,
+and the native viewport directly for pan, zoom, focus and resizing. Both world axes keep the
+native scale: the floor is no longer skewed or compressed to fit the concept room. Switching
+style preserves the camera rather than starting a new fitting baseline.
 The native simulation still runs first. The artwork never decides an agent's destination, task,
 tool permission, capability or station layout. Specialist compute stations can use a role-specific
 desk silhouette; their canonical capability and ID are retained.
 
-Floor patches project onto actual floor spans, including holes and added rooms. Wall and cap
-patches follow the station outline. Planet/city windows fit a real rear wall; the airship uses
+Floor patches project onto actual native floor spans, including holes, corridors and added
+rooms. Wall and cap patches follow that same station outline; raised hull and sprite artwork
+provide visual depth without changing the floor footprint. The native `SpaceBG` paints the
+space backdrop using the current camera. Isolated previews use a cached starfield/nebula
+fallback when that native module is absent. Planet/city windows fit a real rear wall; the airship uses
 portholes. Flat console sources receive textured bases. Depth ordering, contact shadows and
 collision-aware live name/role labels keep crew and equipment readable. Unrecognized future
 props get a visible, pickable fallback instead of disappearing.
@@ -58,7 +65,10 @@ pixel readback and cached terrain is reused until geometry or the view changes.
 Walking animation uses the native position, facing and odometer. Working, waiting, seated and
 resting poses use native state; reduced motion disables the added gait/pulse. Sprite and label
 hits resolve to real agent/equipment identities. Clicking them opens the existing StarNet
-inspection surfaces. The live minimap uses canonical placement and equipment users.
+inspection surfaces. With more than 12 crew, hovered, waiting and active/tool-using names take
+priority; idle names remain in the crew panel and appear on hover. Overlapping non-hovered
+labels can be omitted. Every real body and equipment object remains drawn and pickable. The
+live minimap uses canonical placement and equipment users.
 
 `openart-client.css` supplies each concept's client composition and decorative surfaces without
 reusing its printed example values. The original event stream, conversations, command composer,
@@ -66,15 +76,21 @@ model/agent/attachment/voice controls, native windows and automation-resume cont
 to their existing handlers. No mock task percentages or status feed are introduced.
 
 The footer's eight real-window buttons now sample the actual reference icon cells. Their desktop
-strip spans the reference's bottom-right area; compact layouts keep the native menu row. Crew
-rows show the real agent name and current status alongside the source portrait. Actual roles
+strip spans the reference's bottom-right area. At desktop widths of 861–1100 px it now fits
+inside the narrower right rail, while chat filters and the four native footer menus use separate
+rows. Minimized-window restore chips get their own row when present. At widths up to 860 px
+the decorative dock is hidden and the native menu row remains. Crew cards retain their full
+contents in the scrolling rail. Rows show the real agent name and current status alongside the
+source portrait. Alternate styles hide the native and sampled header logos while retaining
+style/camera controls; Original keeps its native header. Actual roles
 remain available in the row title and native dossier. System font stacks match the four sci-fi
 concepts' condensed sans lettering and the airship's serif treatment; no external font requests
 are added. OSRS's independent fonts, markup behavior and appearance options remain unchanged.
 
 ## Scope and visual limits
 
-These are source-backed 2D perspective renderers, not fully modeled 3D scenes. Source characters
+These are source-backed 2D overhead station renderers with raised walls and sprites, not fully
+modeled 3D scenes. Source characters
 have one photographed pose plus mirroring, gait, seat and rest transformations; they do not have
 the OSRS atlas's four authored facings or bespoke tool-use clips. Occluded portions are
 reconstructed from the approved image. A production asset pass can replace those cutouts with
@@ -88,7 +104,8 @@ feature, rather than theme-specific decorative behavior.
 
 ## Validation and review
 
-The 16 focused headless suites pass. The presentation checks include all eight picker entries,
+Before the current native geometry/camera correction, 16 focused headless suites passed. Those
+earlier presentation checks included all eight picker entries,
 source dimensions, frozen definitions, real identity/picking, coordinate inversion, fallback,
 role/model/skin preservation, motion continuity and cosmetic preference isolation.
 
@@ -96,8 +113,8 @@ All five shipped renderers were also executed directly with decoded source asset
 immutable seeded station containing nine agents and 19 placed props. Each rendered successfully,
 produced agent/equipment hit bounds and left the input state unchanged. `renderer-previews/`
 in the handoff ZIP contains these direct outputs, not live-browser screenshots or provider runs.
-The prior OSRS renderer previews are retained. OSRS source and assets compare byte for byte
-against `d99ff0e7341baa14d5959127ba4bd67f2d8778fb`.
+The prior OSRS renderer previews are retained. OSRS art assets and cosmetic options are retained;
+its world renderer now shares the corrected native camera, backdrop and dense-label behavior.
 
 The direct check is reproducible after the existing `npm ci`:
 
@@ -108,10 +125,18 @@ node scripts/render-station-style-previews.mjs --out /absolute/path/to/renderer-
 It uses the bundled canonical review-station fixture, decodes the actual PNG sources and runs
 each shipped renderer in a separate process to bound native image memory. It checks decoded
 visible/transparent sprite boundaries, the immutable snapshot, agent/equipment hit counts and
-canonical picking. It performs no provider calls and needs no saved user workspace, server or
-browser. These captures verify renderer execution; they do not replace browser layout checks.
+canonical picking. The current script also checks native fit, pan, zoom and resize. Add
+`--dense` for the frozen 39-agent, 102-equipment station and dense-label/hover identity checks.
+It performs no provider calls and needs no saved user workspace, server or browser. These captures verify renderer execution; they do not replace browser layout checks.
 
-Full current browser validation remains pending. `scripts/verify-station-themes.mjs` is extended
+This correction passed 18 focused suites and direct dense execution of all five shipped views
+with 39 agents and 102 equipment objects, including native fit/pan/zoom/resize, exact tile
+boundaries, canonical picking, sparse idle labels, hover identification and immutable inputs.
+The current browser attempt booted the isolated sidecar but Chrome aborted before CDP because
+its local singleton socket returned `EPERM`. Current browser layout validation is therefore
+blocked, not passing. Earlier Chrome runs on 1 October 2026 had a similar local IPC limitation
+and a rejected escalation.
+`scripts/verify-station-themes.mjs` is extended
 for the five loaded sources and their real NPC interactions, as well as the existing original,
 OSRS/armour, holographic, persistence and compact-layout checks. Run it in a normal development
 environment with a working `SKYNET_CHROME` executable. The last completed browser pass was

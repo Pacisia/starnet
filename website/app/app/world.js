@@ -10115,6 +10115,7 @@ const World = (() => {
       dir:b.dir,state:b.state,odo:b.odo||0,sitting:!!b.sitting,seated:!!b.seated,lying:!!b.lying,
       moving: !!b.target, working: !!b.working || agentRunsLive(b.agentId || b.id),
       waiting: b === agent ? !!awaitPrompt : crewIsAwaiting(b), unplaced: !!b.unplaced,
+      hovered: b === hoverAgent,
       tool: (glyphByAgent.get(b.agentId || b.id) || {}).name || null, usingProp: b.usingProp || null
     }));
     const equipment = (geo.props || []).map(p => {

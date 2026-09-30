@@ -83,7 +83,7 @@ const StationThemeUI = (() => {
     if(typeof StationArt!=='undefined'&&StationArt.has(id))StationArt.applyUI(id);
     // Let the existing resize observer rebuild its canvas and camera using the new layout.
     window.dispatchEvent(new Event('resize'));tick();
-    if(typeof World!=='undefined'&&World.presentationOverview)World.presentationOverview();
+    // Preserve the current camera while swapping art; Station/minimap explicitly refit.
   }
   function setFeed(mode) {
     feedMode=mode==='activity'?'activity':'conversation';

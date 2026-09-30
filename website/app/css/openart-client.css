@@ -65,6 +65,9 @@ body[data-station-theme="steampunk-airship"][data-station-art="openart"] .icon-c
 body[data-station-theme="steampunk-airship"][data-station-art="openart"] .icon-analytics{--station-art-icon-y:497}
 body[data-station-theme="steampunk-airship"][data-station-art="openart"] .icon-settings{--station-art-icon-y:560}
 body[data-station-theme][data-station-art="openart"] #station-game-overview{position:relative;display:flex;flex-direction:column;min-height:0;overflow-y:auto;gap:calc(7px * var(--station-art-ui-scale));padding:0 calc(12px * var(--station-art-ui-scale)) calc(65px * var(--station-art-ui-scale));border:0;border-radius:0;box-shadow:none;background:var(--theme-panel) var(--station-art-texture,none)!important;background-size:calc(164px * var(--station-art-ui-scale)) calc(39px * var(--station-art-ui-scale))!important;color:var(--theme-text);font:21px/1.15 var(--station-art-font)}
+/* A real station can have dozens of crew. Keep each card's contents intact and let
+   the rail scroll; flex-shrinking the crew card hid its rows below the mission. */
+body[data-station-theme][data-station-art="openart"] #station-game-overview>:not(.osrs-client-tabs){flex-shrink:0}
 body[data-station-theme][data-station-art="openart"] #station-game-overview::after{content:'';position:absolute;pointer-events:none;inset:calc(296px * var(--station-art-ui-scale)) 0 calc(65px * var(--station-art-ui-scale));border:calc(10px * var(--station-art-ui-scale)) solid transparent;border-image:var(--station-art-panel,none) 10 stretch}
 body[data-station-theme][data-station-art="openart"] .station-map-shell{height:calc(296px * var(--station-art-ui-scale));flex-basis:calc(296px * var(--station-art-ui-scale));margin:0 calc(-12px * var(--station-art-ui-scale));background:var(--station-art-map,none) no-repeat left top;background-size:100% 100%}
 body[data-station-theme][data-station-art="openart"] #station-minimap{position:absolute;left:calc(83px * var(--sn-unzoom,1));top:calc(9px * var(--sn-unzoom,1));width:calc(270px * var(--sn-unzoom,1));height:calc(270px * var(--sn-unzoom,1));margin:0;clip-path:circle(47%);border-radius:50%}
@@ -162,22 +165,49 @@ body[data-station-theme][data-station-art="openart"] :is(button,select):focus-vi
   body[data-station-theme][data-station-art="openart"] #bottombar{padding-right:68px}
 }
 @media(max-width:1100px) and (min-width:861px){
-  body[data-station-theme][data-station-art="openart"]{--station-art-tab-scale:.846154}
-  body[data-station-theme][data-station-art="openart"] #screen-game.active{grid-template-columns:calc(165px * var(--sn-unzoom,1)) minmax(0,1fr) calc(300px * var(--sn-unzoom,1))!important;grid-template-rows:calc(95px * var(--sn-unzoom,1)) minmax(160px,1fr) calc(210px * var(--sn-unzoom,1)) calc(55px * var(--sn-unzoom,1))!important}
-  body[data-station-theme][data-station-art="openart"] #topbar{background-size:364px 95px!important}
-  body[data-station-theme][data-station-art="openart"] .station-game-nav button{font-size:20px;gap:calc(1px * var(--station-art-ui-scale));min-height:calc(55px * var(--station-art-ui-scale));flex-basis:calc(55px * var(--station-art-ui-scale))}
-  body[data-station-theme][data-station-art="openart"] .station-game-nav .osrs-nav-icon{width:calc(47px * var(--station-art-ui-scale));flex-basis:calc(47px * var(--station-art-ui-scale));background-position:calc(-21px * var(--station-art-ui-scale)) calc(var(--station-art-icon-y) * -1px * var(--station-art-ui-scale))}
-  body[data-station-theme][data-station-art="openart"] .station-map-shell{height:calc(246px * var(--station-art-ui-scale));flex-basis:calc(246px * var(--station-art-ui-scale))}
-  body[data-station-theme][data-station-art="openart"] #station-minimap{left:calc(69px * var(--station-art-ui-scale));top:calc(7px * var(--station-art-ui-scale));width:calc(224px * var(--station-art-ui-scale));height:calc(224px * var(--station-art-ui-scale))}
-  body[data-station-theme][data-station-art="openart"] .osrs-map-orbs{left:calc(10px * var(--station-art-ui-scale));top:calc(79px * var(--station-art-ui-scale));font-size:21px}
-  body[data-station-theme][data-station-art="openart"] .osrs-map-orbs div{width:calc(36px * var(--station-art-ui-scale));height:calc(29px * var(--station-art-ui-scale));margin-bottom:calc(13px * var(--station-art-ui-scale))}
-  body[data-station-theme][data-station-art="openart"] .osrs-map-orbs div:nth-child(4){margin-left:calc(49px * var(--station-art-ui-scale))}
-  body[data-station-theme][data-station-art="openart"] #station-game-overview::after{top:calc(246px * var(--station-art-ui-scale))}
-  body[data-station-theme][data-station-art="openart"] .station-overview-heading{font-size:21px;height:auto;min-height:calc(65px * var(--station-art-ui-scale))}
-  body[data-station-theme][data-station-art="openart"] .station-overview-stats{font-size:20px}
-  body[data-station-theme][data-station-art="openart"] #bottombar .bb-grp{font-size:16px;padding:2px 4px!important;height:43px!important}
-  body[data-station-theme][data-station-art="openart"] #bottombar{padding-right:129px}
-  body[data-station-theme][data-station-art="openart"] .osrs-chat-filters button{font-size:18px;border-width:5px}
+  /* The 1536px concept's chrome must leave a useful world at the desktop app's
+     1024px default width. Scale its artwork uniformly, without changing text zoom. */
+  body[data-station-theme][data-station-art="openart"]{--station-art-ui-scale:calc(.74 * var(--sn-unzoom,1));--station-art-tab-scale:.720558883}
+  body[data-station-theme][data-station-art="openart"] #screen-game.active{grid-template-columns:calc(151.7px * var(--sn-unzoom,1)) minmax(0,1fr) calc(267.14px * var(--sn-unzoom,1))!important;grid-template-rows:calc(80px * var(--sn-unzoom,1)) minmax(160px,1fr) calc(160px * var(--sn-unzoom,1)) calc(62px * var(--sn-unzoom,1))!important}
+  body[data-station-theme][data-station-art="openart"] #topbar{background-size:306px 80px!important}
+  body[data-station-theme][data-station-art="openart"] .osrs-station-status{min-width:226px;height:35px;font-size:19px;gap:7px;padding:0 9px}
+  body[data-station-theme][data-station-art="openart"] .station-ui-picker{font-size:14px;gap:5px;bottom:7px}
+  body[data-station-theme][data-station-art="openart"] .station-ui-picker select{font-size:16px;max-width:180px;min-height:25px}
+  body[data-station-theme][data-station-art="openart"] .station-game-nav button{font-size:17px;gap:calc(4px * var(--sn-unzoom,1));min-height:calc(38px * var(--sn-unzoom,1));flex-basis:calc(38px * var(--sn-unzoom,1))}
+  body[data-station-theme][data-station-art="openart"] .station-game-nav .osrs-nav-icon{width:calc(32px * var(--sn-unzoom,1));flex-basis:calc(32px * var(--sn-unzoom,1));height:calc(38px * var(--sn-unzoom,1));background-position:calc(-16px * var(--station-art-ui-scale)) calc(var(--station-art-icon-y) * -1px * var(--station-art-ui-scale))}
+  body[data-station-theme][data-station-art="openart"] .osrs-map-orbs{font-size:19px}
+  body[data-station-theme][data-station-art="openart"] .station-overview-heading{font-size:18px;min-height:calc(48px * var(--sn-unzoom,1))}
+  body[data-station-theme][data-station-art="openart"] .station-overview-heading small{font-size:16px;margin-top:3px}
+  body[data-station-theme][data-station-art="openart"] .station-overview-stats{font-size:17px;padding:4px 7px}
+  body[data-station-theme][data-station-art="openart"] .station-overview-stats>div{min-height:21px;margin:1px 0}
+  body[data-station-theme][data-station-art="openart"] .station-side-title{font-size:18px}
+  body[data-station-theme][data-station-art="openart"] .station-current-work button,body[data-station-theme][data-station-art="openart"] .station-feed-empty{font-size:16px}
+  body[data-station-theme][data-station-art="openart"] .station-crew-entry{font-size:16px;min-height:calc(28px * var(--sn-unzoom,1))}
+  body[data-station-theme][data-station-art="openart"] .station-crew-entry small{font-size:14px}
+  /* The icon dock belongs to the sidebar. Its old 424px fixed viewport strip
+     overlapped a 300px rail and covered native footer controls in small windows. */
+  body[data-station-theme][data-station-art="openart"] .osrs-client-tabs{width:calc(267.14px * var(--sn-unzoom,1));height:calc(46.8px * var(--sn-unzoom,1))}
+  body[data-station-theme][data-station-art="openart"] #station-game-overview{padding-bottom:calc(51px * var(--sn-unzoom,1))}
+  body[data-station-theme][data-station-art="openart"] #station-game-overview::after{bottom:calc(51px * var(--sn-unzoom,1))}
+  /* Six chat filters and four full native menus have distinct rows; neither may
+     rely on overflowing the 756px footer or covering another control. */
+  body[data-station-theme][data-station-art="openart"] #bottombar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:26px 26px;padding:3px 5px;gap:2px 4px;align-items:stretch;box-sizing:border-box;overflow:visible}
+  body[data-station-theme][data-station-art="openart"] .osrs-chat-filters{grid-column:1 / -1;min-width:0;height:26px;gap:3px}
+  body[data-station-theme][data-station-art="openart"] .osrs-chat-filters button{font-size:15px;border-width:2px;min-width:0}
+  body[data-station-theme][data-station-art="openart"] .osrs-chat-filters button small{display:none}
+  body[data-station-theme][data-station-art="openart"] #bottombar .bb-group{min-width:0}
+  body[data-station-theme][data-station-art="openart"] #bottombar .bb-grp{font-size:14px;letter-spacing:1px;width:100%;justify-content:center;gap:4px;padding:2px 4px!important;height:26px!important}
+  /* Minimized windows keep their native restore chips in an optional third row. */
+  body[data-station-theme][data-station-art="openart"] #screen-game.active:has(#term-strip.has-chips){grid-template-rows:calc(80px * var(--sn-unzoom,1)) minmax(160px,1fr) calc(160px * var(--sn-unzoom,1)) calc(90px * var(--sn-unzoom,1))!important}
+  body[data-station-theme][data-station-art="openart"] #bottombar:has(#term-strip.has-chips){grid-template-rows:26px 26px 28px}
+  body[data-station-theme][data-station-art="openart"] #term-strip{grid-column:1 / -1;min-width:0;max-width:100%;margin:0}
+  body[data-station-theme][data-station-art="openart"] #screen-game.active.comms-expanded{grid-template-rows:calc(80px * var(--sn-unzoom,1)) minmax(0,1fr) calc(62px * var(--sn-unzoom,1))!important}
+  body[data-station-theme][data-station-art="openart"] #screen-game.active.comms-expanded:has(#term-strip.has-chips){grid-template-rows:calc(80px * var(--sn-unzoom,1)) minmax(0,1fr) calc(90px * var(--sn-unzoom,1))!important}
+  body[data-station-theme][data-station-art="openart"] .station-feed-tabs{font-size:13px}
+  body[data-station-theme][data-station-art="openart"] .station-feed-tabs :is(button,select){font-size:13px;padding:1px 3px}
+  body[data-station-theme][data-station-art="openart"] .station-event{font-size:17px}
+  body[data-station-theme][data-station-art="openart"] .osrs-player-prompt{font-size:17px}
+  body[data-station-theme][data-station-art="openart"] #chat-input{font-size:17px;min-height:22px;max-height:44px}
 }
 @media(max-width:860px){
   body[data-station-theme][data-station-art="openart"] .osrs-client-tabs{display:none}
