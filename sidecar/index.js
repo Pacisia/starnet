@@ -3735,19 +3735,30 @@ function restIfSpent(provider, acct, u) {
   }
 }
 function jwtClaims(tok) { try { return JSON.parse(Buffer.from(String(tok).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')); } catch (_) { return {}; } }
+// A failed ChatGPT usage check keeps the last reading but says why in `source`, so Airtable and the Console show the reason instead of a blank.
+function noteCodexUsageFailure(acct, why) {
+  try {
+    const k = usageKey('codex', acct), prev = accountUsage[k];
+    const msg = 'usage check failed: ' + why;
+    accountUsage[k] = prev ? Object.assign({}, prev, { source: msg })
+      : { plan: '', short: null, weekly: null, status: 'unknown', updated: null, source: msg };
+    console.warn('[accounts] ChatGPT ' + acct + ' ' + msg);
+  } catch (_) {}
+}
 async function refreshCodexUsage(acct) {
   const fns = codexFnsFor(acct);
   let token;
-  try { token = await fns.ensure(); } catch (_) { return; }
+  try { token = await fns.ensure(); } catch (e) { noteCodexUsageFailure(acct, 'sign-in token could not be used (' + ((e && e.code) || (e && e.message) || 'error').toString().slice(0, 80) + ')'); return; }
   const claims = jwtClaims(token);
   const auth = claims['https://api.openai.com/auth'] || {};
   const headers = { Authorization: 'Bearer ' + token, Accept: 'application/json', 'User-Agent': 'starnet-usage/1.0' };
   if (auth.chatgpt_account_id) headers['ChatGPT-Account-Id'] = String(auth.chatgpt_account_id);
   try {
     const r = await globalThis.fetch('https://chatgpt.com/backend-api/wham/usage', { headers, signal: AbortSignal.timeout(15000) });
-    if (!r.ok) return;
+    if (!r.ok) { noteCodexUsageFailure(acct, 'usage page answered HTTP ' + r.status); return; }
     const j = await r.json();
     const rl = (j && j.rate_limit) || {};
+    if (!rl.primary_window && !rl.secondary_window) { noteCodexUsageFailure(acct, 'usage page had no usage windows (response shape changed?)'); return; }
     const win = (w) => w ? {
       used: Math.max(0, Number(w.used_percent != null ? w.used_percent : w.usedPercent) || 0) / 100,
       label: w.limit_window_seconds ? (w.limit_window_seconds >= 86400 ? Math.round(w.limit_window_seconds / 86400) + ' days' : Math.round(w.limit_window_seconds / 3600) + ' hours') : '',
@@ -3757,7 +3768,7 @@ async function refreshCodexUsage(acct) {
       status: rl.limit_reached ? 'rejected' : (rl.allowed === false ? 'rejected' : 'allowed'), updated: Date.now(), source: 'chatgpt usage api' };
     accountUsage[usageKey('codex', acct)] = u;
     restIfSpent('codex', acct, u);
-  } catch (_) { /* network / shape change: keep the last reading */ }
+  } catch (e) { noteCodexUsageFailure(acct, 'usage check failed (' + ((e && e.name) || 'error') + ')'); /* keep the last reading */ }
 }
 async function refreshAllAccountUsage() {
   const accts = [];
