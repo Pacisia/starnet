@@ -12,7 +12,7 @@ The **UI STYLE** picker is in the station's top bar. The same choices are availa
 
 - **Original StarNet**: the native station, sprites, panels and conversation layout.
 - **OSRS Guild**: the supplied reference's gold header, stone and wood client framing,
-  perspective stone station, detailed fantasy NPCs, timber/CRT capability equipment,
+  overhead stone station with raised walls, detailed fantasy NPCs, timber/CRT capability equipment,
   circular live minimap with real station counts and parchment chat/activity area.
 - **Space Colony**: rugged habitat equipment, astronaut crew, off-white hull panels and a planet window.
 - **Cyberpunk Workshop**: detailed neon-city workshop, specialist crew and industrial consoles.
@@ -23,7 +23,8 @@ The **UI STYLE** picker is in the station's top bar. The same choices are availa
 
 The five new styles use the approved OpenArt concepts as their actual asset sources, including
 crew, equipment, framing, icons and room materials. Their settings cards display those concepts.
-The OSRS renderer, appearance dialog and all OSRS assets are unchanged from `d99ff0e`.
+The OSRS appearance dialog, cosmetic choices and art assets are retained. The current correction
+updates the OSRS/OpenArt camera and world labels while keeping those appearances available.
 
 Selection applies immediately, including during a running task. It persists per browser/app
 origin in `starnet.presentation.v1`. It is deliberately independent of the saved phosphor
@@ -56,11 +57,14 @@ The additions are confined to presentation:
 4. `station-theme-ui.js` and `station-themes.css`: picker, optional game-client layout,
    minimap, read-only instruments and a bounded activity feed. Existing windows and handlers
    remain the navigation targets. There are no new backend API endpoints or capability grants.
-5. `osrs-world.js` and `osrs-client.css`: a separate perspective renderer and the reference client
-   layout. The renderer consumes the same immutable snapshot, paints after native simulation,
-   conveyor and delivery processing, and inverts its own projection for native mouse picking.
-   Sprite and label hit rectangles resolve to canonical agent/equipment coordinates. Pan, zoom,
-   camera focus, minimap selection and station expansion continue to use the existing world.
+5. `osrs-world.js` and `osrs-client.css`: a separate art renderer and the reference client
+   layout. The renderer consumes the same immutable snapshot and paints after native simulation,
+   conveyor and delivery processing. OSRS and OpenArt now reuse the native visible rectangle
+   directly: both world axes have the native scale, with no floor skew, depth compression or new
+   theme-specific camera baseline. Sprite and label hit rectangles resolve to canonical
+   agent/equipment coordinates. Pan, zoom, camera focus, minimap selection and station expansion
+   continue to use the existing world. Changing style preserves the current camera; Station and
+   minimap overview controls remain the explicit ways to refit it.
    Sprite alpha bounds and wall outlines are cached; the frame loop does no pixel readback.
    Complete views register through `StationPresentation.registerView(themeId, renderer)` with
    `draw`, `clientToWorld`, `worldToCanvas` and `reset` methods. Future perspective/3D renderers
@@ -68,8 +72,10 @@ The additions are confined to presentation:
 6. `station-art.js`, `openart-world.js` and `openart-client.css`: five concept-backed complete
    views using that existing renderer API. Each loads its own preserved 3072 × 2048 source PNG
    on demand, extracts and caches presentation assets, and draws the actual station layout,
-   equipment and agent state. The geometry helpers are shared with the existing perspective
-   view. Neither the artwork nor its printed example values become application state.
+   equipment and agent state. The native floor mask, rooms, corridors, holes and prop footprints
+   determine geometry; themes do not replace them with the concept image's room. Raised walls
+   and sprites add visual depth above that unchanged overhead footprint. Neither the artwork
+   nor its printed example values become application state.
 
 Only small hooks are added at the existing world/base, prop and body draw boundaries. Native
 pathfinding, entity selection, conveyors, ownership, task progress, permissions and save logic remain
@@ -77,7 +83,11 @@ authoritative. No agent skin is rewritten in the roster when changing theme.
 
 Alternate renderers bypass the native CRT grain, bloom and curved-screen pass, including its
 inverse pointer transform, for clean readable art. The stored CRT/phosphor preferences are retained
-and apply again in Original. The generated `website/app` mirror is synchronized from `frontend`,
+and apply again in Original. OSRS and OpenArt reuse the native `SpaceBG` backdrop with the native
+camera instead of painting a flat theme background; isolated renderer previews have a cached
+starfield/nebula fallback. Alternate presentations hide both the native logo and sampled header
+logo, leaving the style and camera controls. Original retains its own logo and header.
+The generated `website/app` mirror is synchronized from `frontend`,
 including the fork's latest custom-provider endpoint form changes already present in the source.
 
 ## Crew and activity
@@ -100,6 +110,10 @@ animation limits and exact source provenance.
 Walking uses the existing body's position, facing and odometer. Idle, working, seated and sleeping
 poses use the simulation's state; seated sprites compress their lower pose, resting sprites lie
 down, and working equipment/agents show activity. Labels avoid each other when a crew gathers.
+When more than 12 crew are present, OSRS/OpenArt prioritize hovered, waiting and active/tool-using
+crew labels. Idle names remain in the crew panel and reappear when their body is hovered; a
+non-hovered label may be omitted when it still overlaps another label. This only limits labels:
+every agent body and equipment object is still rendered and retains its real picking identity.
 Reduced motion makes the added animation steady. The
 existing simulation moves working agents to their assigned workstation and handles leisure
 equipment interactions. This change does not invent a separate movement simulation or make
@@ -121,7 +135,12 @@ actual busy sessions and never invents a progress percentage. **Controls** expos
 agent/model/attachment/voice controls; they also appear when the composer receives focus.
 
 The compact layout retains the live world, a small minimap, conversation and all existing dock
-menus on narrow screens. Expanded conversation mode still uses the original conversation.
+menus on narrow screens. At desktop widths of 861–1100 px, the OpenArt chrome scales down, the
+icon dock fits inside the right rail, and chat filters and the four native footer menus occupy
+separate rows. Minimized-window restore chips have an additional row when present. Crew cards
+retain their contents and the rail scrolls rather than shrinking away crew rows. At widths up to
+860 px, the decorative dock stays hidden and the native menu row remains. Expanded conversation
+mode still uses the original conversation.
 
 ## Per-agent NPCs and armour
 
@@ -155,8 +174,10 @@ five new styles. The bundle includes that commit, so the same rollback branch ca
 
 ## Verification
 
-The previous complete browser pass was at commit `c83f238`; it validated the four original
-presentations before the armour/material and OpenArt revisions. Current validation:
+The last recorded complete browser pass before the current native geometry/camera correction
+was at commit `c83f238`; it validated the four original presentations before the armour/material
+and OpenArt revisions. The following results describe earlier revisions, not a passing receipt
+for this correction (1 October 2026):
 
 - 16 focused headless suites passed for cosmetic/theme isolation, world model, native body clicks,
   character rendering, settings, station authority, containment, seating, approval and movement.
@@ -165,19 +186,39 @@ presentations before the armour/material and OpenArt revisions. Current validati
   combinations. Renderer previews are explicitly identified; they are not live app screenshots.
 - Direct execution of all five shipped `OpenArtWorld` views loaded the preserved source images,
   rendered nine real fixture agents and 19 placed props, produced picking bounds, and left all
-  immutable station inputs unchanged. The current previews capture this renderer execution.
+  immutable station inputs unchanged. The earlier previews capture that renderer execution.
   `node scripts/render-station-style-previews.mjs --out /path/to/previews` reproduces these checks
   from a bundled canonical review fixture without a user save, server or provider credentials.
 - Theme tests also cover all eight catalog entries, the source PNG dimensions, immutable asset
   definitions, complete-view switching, real equipment identities, inverse coordinates, native
-  fallback and reduced-motion/odometer behavior. The source and assets for OSRS are byte-identical
-  to the pre-OpenArt rollback commit.
+  fallback and reduced-motion/odometer behavior. The OSRS art assets and cosmetic appearance
+  catalog are retained; its world renderer is now changed by the camera/backdrop correction.
 - The expanded `scripts/verify-station-themes.mjs` checks all eight styles, real new-theme agent
   picking, source-backed framing, rune/dragon on a working agent, unchanged canonical data,
-  per-agent reload/reset and a phone-size appearance picker. Current browser checks remain
-  unverified: Chrome's binary is available, but default local IPC binding still returns `EPERM`.
-  The previous escalation was rejected. Do not treat these checks as passed.
+  per-agent reload/reset and a phone-size appearance picker. During the earlier refinement session
+  on 1 October 2026, Chrome local IPC binding returned `EPERM` and automatic review rejected
+  escalation. That is a historical environment limitation, not the result of the current run.
 - Website mirror synchronization and `git diff --check` passed.
+
+Current correction verification (1 October 2026):
+
+- 18 focused suites passed, including `station-presentation-camera`, theme/state isolation,
+  native clicking, movement, seating, authority, containment, approvals, settings and mirror sync.
+- The camera regression compares native pixel positions at three zoom levels and two pans,
+  resize anchoring and background parallax. An independent exposed-tile-edge check confirms
+  exact room outlines with staircase corners, a courtyard hole, disconnected rooms and diagonal
+  contacts; no staircase bevel or trapezoid shear remains.
+- All five shipped OpenArt views passed direct dense capture checks with the immutable
+  39-agent/102-capability fixture, canonical picking, fit/pan/zoom/resize, hover labels and four
+  pose states. Every real entity is retained. These are seeded renderer captures, not screenshots
+  of the user's Mac app.
+- Source syntax, website mirror synchronization and `git diff --check` passed.
+- The current browser attempt booted the isolated sidecar, but Chrome aborted before CDP
+  connection: `process_singleton_posix.cc` reported `socket() failed: Operation not permitted`.
+  Therefore the current browser layout/interaction check is blocked, not passing. The expanded
+  verifier includes alternate-logo removal, camera preservation, all five 1024 × 640 desktop
+  layouts and optional screenshots via `STARNET_THEME_SCREENSHOTS`, plus existing phone and
+  interaction checks. Run it where Chrome's local IPC is available.
 
 Earlier browser validation (before this revision):
 

@@ -1,0 +1,1352 @@
+{
+  "description": "Presentation-only dense station regression: 39 unique specialist records and 102 real capability props in two unequal orthogonal rooms connected by a corridor. Deterministic public names and idle/working/waiting states; no credentials, conversations, workspace data or provider calls.",
+  "station": {
+    "schema": "starnet.station",
+    "version": 1,
+    "_nid": 200,
+    "meta": {
+      "name": "DENSE REVIEW STATION",
+      "createdAt": 1790802000000,
+      "tier": 0,
+      "spawnRoomId": "hab",
+      "trunkRoomId": "work"
+    },
+    "rooms": {
+      "hab": {
+        "id": "hab",
+        "kind": "hab",
+        "name": "CREW",
+        "rects": [
+          {
+            "x1": 0,
+            "y1": 10,
+            "x2": 17,
+            "y2": 25
+          }
+        ],
+        "floorStyle": "hull",
+        "floorMat": "resin",
+        "wallMat": "panelled",
+        "hullStyle": "bone",
+        "tier": 0,
+        "floorPaint": {}
+      },
+      "work": {
+        "id": "work",
+        "kind": "work",
+        "name": "CAPABILITIES",
+        "rects": [
+          {
+            "x1": 23,
+            "y1": 0,
+            "x2": 56,
+            "y2": 24
+          }
+        ],
+        "floorStyle": "hull",
+        "floorMat": "resin",
+        "wallMat": "panelled",
+        "hullStyle": "bone",
+        "tier": 0,
+        "floorPaint": {}
+      },
+      "link": {
+        "id": "link",
+        "kind": "corridor",
+        "name": "CORRIDOR",
+        "rects": [
+          {
+            "x1": 18,
+            "y1": 17,
+            "x2": 22,
+            "y2": 19
+          }
+        ],
+        "floorStyle": "hull",
+        "floorMat": "resin",
+        "wallMat": "panelled",
+        "hullStyle": "bone",
+        "tier": 0,
+        "floorPaint": {}
+      }
+    },
+    "order": [
+      "hab",
+      "work",
+      "link"
+    ],
+    "props": [
+      {
+        "id": "review-prop-001",
+        "t": "desk",
+        "x": 1,
+        "y": 11,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-01"
+      },
+      {
+        "id": "review-prop-002",
+        "t": "war_intelcab",
+        "x": 5,
+        "y": 11,
+        "w": 1,
+        "h": 2
+      },
+      {
+        "id": "review-prop-003",
+        "t": "comms_dish",
+        "x": 9,
+        "y": 11,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-004",
+        "t": "gigs_servercart",
+        "x": 13,
+        "y": 11,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-005",
+        "t": "workbench",
+        "x": 1,
+        "y": 13,
+        "w": 2,
+        "h": 1
+      },
+      {
+        "id": "review-prop-006",
+        "t": "studio",
+        "x": 5,
+        "y": 13,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-007",
+        "t": "connector_portal",
+        "x": 9,
+        "y": 13,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-008",
+        "t": "consoleL",
+        "x": 13,
+        "y": 13,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-08"
+      },
+      {
+        "id": "review-prop-009",
+        "t": "bench",
+        "x": 1,
+        "y": 15,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-09"
+      },
+      {
+        "id": "review-prop-010",
+        "t": "desk",
+        "x": 5,
+        "y": 15,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-10"
+      },
+      {
+        "id": "review-prop-011",
+        "t": "war_intelcab",
+        "x": 9,
+        "y": 15,
+        "w": 1,
+        "h": 2
+      },
+      {
+        "id": "review-prop-012",
+        "t": "comms_dish",
+        "x": 13,
+        "y": 15,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-013",
+        "t": "gigs_servercart",
+        "x": 24,
+        "y": 1,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-014",
+        "t": "workbench",
+        "x": 27,
+        "y": 1,
+        "w": 2,
+        "h": 1
+      },
+      {
+        "id": "review-prop-015",
+        "t": "studio",
+        "x": 30,
+        "y": 1,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-016",
+        "t": "connector_portal",
+        "x": 33,
+        "y": 1,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-017",
+        "t": "consoleL",
+        "x": 36,
+        "y": 1,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-17"
+      },
+      {
+        "id": "review-prop-018",
+        "t": "bench",
+        "x": 39,
+        "y": 1,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-18"
+      },
+      {
+        "id": "review-prop-019",
+        "t": "desk",
+        "x": 42,
+        "y": 1,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-19"
+      },
+      {
+        "id": "review-prop-020",
+        "t": "war_intelcab",
+        "x": 45,
+        "y": 1,
+        "w": 1,
+        "h": 2
+      },
+      {
+        "id": "review-prop-021",
+        "t": "comms_dish",
+        "x": 48,
+        "y": 1,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-022",
+        "t": "gigs_servercart",
+        "x": 51,
+        "y": 1,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-023",
+        "t": "workbench",
+        "x": 24,
+        "y": 3,
+        "w": 2,
+        "h": 1
+      },
+      {
+        "id": "review-prop-024",
+        "t": "studio",
+        "x": 27,
+        "y": 3,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-025",
+        "t": "connector_portal",
+        "x": 30,
+        "y": 3,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-026",
+        "t": "consoleL",
+        "x": 33,
+        "y": 3,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-26"
+      },
+      {
+        "id": "review-prop-027",
+        "t": "bench",
+        "x": 36,
+        "y": 3,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-27"
+      },
+      {
+        "id": "review-prop-028",
+        "t": "desk",
+        "x": 39,
+        "y": 3,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-28"
+      },
+      {
+        "id": "review-prop-029",
+        "t": "war_intelcab",
+        "x": 42,
+        "y": 3,
+        "w": 1,
+        "h": 2
+      },
+      {
+        "id": "review-prop-030",
+        "t": "comms_dish",
+        "x": 45,
+        "y": 3,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-031",
+        "t": "gigs_servercart",
+        "x": 48,
+        "y": 3,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-032",
+        "t": "workbench",
+        "x": 51,
+        "y": 3,
+        "w": 2,
+        "h": 1
+      },
+      {
+        "id": "review-prop-033",
+        "t": "studio",
+        "x": 24,
+        "y": 5,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-034",
+        "t": "connector_portal",
+        "x": 27,
+        "y": 5,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-035",
+        "t": "consoleL",
+        "x": 30,
+        "y": 5,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-35"
+      },
+      {
+        "id": "review-prop-036",
+        "t": "bench",
+        "x": 33,
+        "y": 5,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-36"
+      },
+      {
+        "id": "review-prop-037",
+        "t": "desk",
+        "x": 36,
+        "y": 5,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-37"
+      },
+      {
+        "id": "review-prop-038",
+        "t": "war_intelcab",
+        "x": 39,
+        "y": 5,
+        "w": 1,
+        "h": 2
+      },
+      {
+        "id": "review-prop-039",
+        "t": "comms_dish",
+        "x": 42,
+        "y": 5,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-040",
+        "t": "gigs_servercart",
+        "x": 45,
+        "y": 5,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-041",
+        "t": "workbench",
+        "x": 48,
+        "y": 5,
+        "w": 2,
+        "h": 1
+      },
+      {
+        "id": "review-prop-042",
+        "t": "studio",
+        "x": 51,
+        "y": 5,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-043",
+        "t": "connector_portal",
+        "x": 24,
+        "y": 7,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-044",
+        "t": "consoleL",
+        "x": 27,
+        "y": 7,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-05"
+      },
+      {
+        "id": "review-prop-045",
+        "t": "bench",
+        "x": 30,
+        "y": 7,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-06"
+      },
+      {
+        "id": "review-prop-046",
+        "t": "desk",
+        "x": 33,
+        "y": 7,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-07"
+      },
+      {
+        "id": "review-prop-047",
+        "t": "war_intelcab",
+        "x": 36,
+        "y": 7,
+        "w": 1,
+        "h": 2
+      },
+      {
+        "id": "review-prop-048",
+        "t": "comms_dish",
+        "x": 39,
+        "y": 7,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-049",
+        "t": "gigs_servercart",
+        "x": 42,
+        "y": 7,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-050",
+        "t": "workbench",
+        "x": 45,
+        "y": 7,
+        "w": 2,
+        "h": 1
+      },
+      {
+        "id": "review-prop-051",
+        "t": "studio",
+        "x": 48,
+        "y": 7,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-052",
+        "t": "connector_portal",
+        "x": 51,
+        "y": 7,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-053",
+        "t": "consoleL",
+        "x": 24,
+        "y": 9,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-14"
+      },
+      {
+        "id": "review-prop-054",
+        "t": "bench",
+        "x": 27,
+        "y": 9,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-15"
+      },
+      {
+        "id": "review-prop-055",
+        "t": "desk",
+        "x": 30,
+        "y": 9,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-16"
+      },
+      {
+        "id": "review-prop-056",
+        "t": "war_intelcab",
+        "x": 33,
+        "y": 9,
+        "w": 1,
+        "h": 2
+      },
+      {
+        "id": "review-prop-057",
+        "t": "comms_dish",
+        "x": 36,
+        "y": 9,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-058",
+        "t": "gigs_servercart",
+        "x": 39,
+        "y": 9,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-059",
+        "t": "workbench",
+        "x": 42,
+        "y": 9,
+        "w": 2,
+        "h": 1
+      },
+      {
+        "id": "review-prop-060",
+        "t": "studio",
+        "x": 45,
+        "y": 9,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-061",
+        "t": "connector_portal",
+        "x": 48,
+        "y": 9,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-062",
+        "t": "consoleL",
+        "x": 51,
+        "y": 9,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-23"
+      },
+      {
+        "id": "review-prop-063",
+        "t": "bench",
+        "x": 24,
+        "y": 11,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-24"
+      },
+      {
+        "id": "review-prop-064",
+        "t": "desk",
+        "x": 27,
+        "y": 11,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-25"
+      },
+      {
+        "id": "review-prop-065",
+        "t": "war_intelcab",
+        "x": 30,
+        "y": 11,
+        "w": 1,
+        "h": 2
+      },
+      {
+        "id": "review-prop-066",
+        "t": "comms_dish",
+        "x": 33,
+        "y": 11,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-067",
+        "t": "gigs_servercart",
+        "x": 36,
+        "y": 11,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-068",
+        "t": "workbench",
+        "x": 39,
+        "y": 11,
+        "w": 2,
+        "h": 1
+      },
+      {
+        "id": "review-prop-069",
+        "t": "studio",
+        "x": 42,
+        "y": 11,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-070",
+        "t": "connector_portal",
+        "x": 45,
+        "y": 11,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-071",
+        "t": "consoleL",
+        "x": 48,
+        "y": 11,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-32"
+      },
+      {
+        "id": "review-prop-072",
+        "t": "bench",
+        "x": 51,
+        "y": 11,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-33"
+      },
+      {
+        "id": "review-prop-073",
+        "t": "desk",
+        "x": 24,
+        "y": 13,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-34"
+      },
+      {
+        "id": "review-prop-074",
+        "t": "war_intelcab",
+        "x": 27,
+        "y": 13,
+        "w": 1,
+        "h": 2
+      },
+      {
+        "id": "review-prop-075",
+        "t": "comms_dish",
+        "x": 30,
+        "y": 13,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-076",
+        "t": "gigs_servercart",
+        "x": 33,
+        "y": 13,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-077",
+        "t": "workbench",
+        "x": 36,
+        "y": 13,
+        "w": 2,
+        "h": 1
+      },
+      {
+        "id": "review-prop-078",
+        "t": "studio",
+        "x": 39,
+        "y": 13,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-079",
+        "t": "connector_portal",
+        "x": 42,
+        "y": 13,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-080",
+        "t": "consoleL",
+        "x": 45,
+        "y": 13,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-02"
+      },
+      {
+        "id": "review-prop-081",
+        "t": "bench",
+        "x": 48,
+        "y": 13,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-03"
+      },
+      {
+        "id": "review-prop-082",
+        "t": "desk",
+        "x": 51,
+        "y": 13,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-04"
+      },
+      {
+        "id": "review-prop-083",
+        "t": "war_intelcab",
+        "x": 24,
+        "y": 15,
+        "w": 1,
+        "h": 2
+      },
+      {
+        "id": "review-prop-084",
+        "t": "comms_dish",
+        "x": 27,
+        "y": 15,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-085",
+        "t": "gigs_servercart",
+        "x": 30,
+        "y": 15,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-086",
+        "t": "workbench",
+        "x": 33,
+        "y": 15,
+        "w": 2,
+        "h": 1
+      },
+      {
+        "id": "review-prop-087",
+        "t": "studio",
+        "x": 36,
+        "y": 15,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-088",
+        "t": "connector_portal",
+        "x": 39,
+        "y": 15,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-089",
+        "t": "consoleL",
+        "x": 42,
+        "y": 15,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-11"
+      },
+      {
+        "id": "review-prop-090",
+        "t": "bench",
+        "x": 45,
+        "y": 15,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-12"
+      },
+      {
+        "id": "review-prop-091",
+        "t": "desk",
+        "x": 48,
+        "y": 15,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-13"
+      },
+      {
+        "id": "review-prop-092",
+        "t": "war_intelcab",
+        "x": 51,
+        "y": 15,
+        "w": 1,
+        "h": 2
+      },
+      {
+        "id": "review-prop-093",
+        "t": "comms_dish",
+        "x": 24,
+        "y": 17,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-094",
+        "t": "gigs_servercart",
+        "x": 27,
+        "y": 17,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-095",
+        "t": "workbench",
+        "x": 30,
+        "y": 17,
+        "w": 2,
+        "h": 1
+      },
+      {
+        "id": "review-prop-096",
+        "t": "studio",
+        "x": 33,
+        "y": 17,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "id": "review-prop-097",
+        "t": "connector_portal",
+        "x": 36,
+        "y": 17,
+        "w": 1,
+        "h": 1
+      },
+      {
+        "id": "review-prop-098",
+        "t": "consoleL",
+        "x": 39,
+        "y": 17,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-20"
+      },
+      {
+        "id": "review-prop-099",
+        "t": "bench",
+        "x": 42,
+        "y": 17,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-21"
+      },
+      {
+        "id": "review-prop-100",
+        "t": "desk",
+        "x": 45,
+        "y": 17,
+        "w": 2,
+        "h": 1,
+        "agentId": "review-agent-22"
+      },
+      {
+        "id": "review-prop-101",
+        "t": "war_intelcab",
+        "x": 48,
+        "y": 17,
+        "w": 1,
+        "h": 2
+      },
+      {
+        "id": "review-prop-102",
+        "t": "comms_dish",
+        "x": 51,
+        "y": 17,
+        "w": 2,
+        "h": 2
+      }
+    ],
+    "belts": {},
+    "edges": []
+  },
+  "agents": [
+    {
+      "id": "review-agent-01",
+      "name": "OPERATOR 01",
+      "specialtyId": null,
+      "role": "orchestrator"
+    },
+    {
+      "id": "review-agent-02",
+      "name": "RESEARCH 02",
+      "specialtyId": "researcher",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-03",
+      "name": "ANALYTICS 03",
+      "specialtyId": "analyst",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-04",
+      "name": "CONTENT 04",
+      "specialtyId": "writer",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-05",
+      "name": "SECURITY 05",
+      "specialtyId": "security",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-06",
+      "name": "DATA 06",
+      "specialtyId": "data",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-07",
+      "name": "FINANCE 07",
+      "specialtyId": "finance",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-08",
+      "name": "INTEGRATION 08",
+      "specialtyId": "integration",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-09",
+      "name": "BUILD 09",
+      "specialtyId": "engineer",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-10",
+      "name": "OPERATOR 10",
+      "specialtyId": null,
+      "role": "orchestrator"
+    },
+    {
+      "id": "review-agent-11",
+      "name": "RESEARCH 11",
+      "specialtyId": "researcher",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-12",
+      "name": "ANALYTICS 12",
+      "specialtyId": "analyst",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-13",
+      "name": "CONTENT 13",
+      "specialtyId": "writer",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-14",
+      "name": "SECURITY 14",
+      "specialtyId": "security",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-15",
+      "name": "DATA 15",
+      "specialtyId": "data",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-16",
+      "name": "FINANCE 16",
+      "specialtyId": "finance",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-17",
+      "name": "INTEGRATION 17",
+      "specialtyId": "integration",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-18",
+      "name": "BUILD 18",
+      "specialtyId": "engineer",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-19",
+      "name": "OPERATOR 19",
+      "specialtyId": null,
+      "role": "orchestrator"
+    },
+    {
+      "id": "review-agent-20",
+      "name": "RESEARCH 20",
+      "specialtyId": "researcher",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-21",
+      "name": "ANALYTICS 21",
+      "specialtyId": "analyst",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-22",
+      "name": "CONTENT 22",
+      "specialtyId": "writer",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-23",
+      "name": "SECURITY 23",
+      "specialtyId": "security",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-24",
+      "name": "DATA 24",
+      "specialtyId": "data",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-25",
+      "name": "FINANCE 25",
+      "specialtyId": "finance",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-26",
+      "name": "INTEGRATION 26",
+      "specialtyId": "integration",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-27",
+      "name": "BUILD 27",
+      "specialtyId": "engineer",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-28",
+      "name": "OPERATOR 28",
+      "specialtyId": null,
+      "role": "orchestrator"
+    },
+    {
+      "id": "review-agent-29",
+      "name": "RESEARCH 29",
+      "specialtyId": "researcher",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-30",
+      "name": "ANALYTICS 30",
+      "specialtyId": "analyst",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-31",
+      "name": "CONTENT 31",
+      "specialtyId": "writer",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-32",
+      "name": "SECURITY 32",
+      "specialtyId": "security",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-33",
+      "name": "DATA 33",
+      "specialtyId": "data",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-34",
+      "name": "FINANCE 34",
+      "specialtyId": "finance",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-35",
+      "name": "INTEGRATION 35",
+      "specialtyId": "integration",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-36",
+      "name": "BUILD 36",
+      "specialtyId": "engineer",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-37",
+      "name": "OPERATOR 37",
+      "specialtyId": null,
+      "role": "orchestrator"
+    },
+    {
+      "id": "review-agent-38",
+      "name": "RESEARCH 38",
+      "specialtyId": "researcher",
+      "role": "specialist"
+    },
+    {
+      "id": "review-agent-39",
+      "name": "ANALYTICS 39",
+      "specialtyId": "analyst",
+      "role": "specialist"
+    }
+  ],
+  "positions": {
+    "review-agent-01": [
+      1.0,
+      17.0
+    ],
+    "review-agent-02": [
+      3.5,
+      17.0
+    ],
+    "review-agent-03": [
+      6.0,
+      17.0
+    ],
+    "review-agent-04": [
+      8.5,
+      17.0
+    ],
+    "review-agent-05": [
+      11.0,
+      17.0
+    ],
+    "review-agent-06": [
+      13.5,
+      17.0
+    ],
+    "review-agent-07": [
+      1.0,
+      18.6
+    ],
+    "review-agent-08": [
+      3.5,
+      18.6
+    ],
+    "review-agent-09": [
+      6.0,
+      18.6
+    ],
+    "review-agent-10": [
+      8.5,
+      18.6
+    ],
+    "review-agent-11": [
+      11.0,
+      18.6
+    ],
+    "review-agent-12": [
+      13.5,
+      18.6
+    ],
+    "review-agent-13": [
+      1.0,
+      20.2
+    ],
+    "review-agent-14": [
+      3.5,
+      20.2
+    ],
+    "review-agent-15": [
+      6.0,
+      20.2
+    ],
+    "review-agent-16": [
+      8.5,
+      20.2
+    ],
+    "review-agent-17": [
+      11.0,
+      20.2
+    ],
+    "review-agent-18": [
+      13.5,
+      20.2
+    ],
+    "review-agent-19": [
+      1.0,
+      21.8
+    ],
+    "review-agent-20": [
+      3.5,
+      21.8
+    ],
+    "review-agent-21": [
+      6.0,
+      21.8
+    ],
+    "review-agent-22": [
+      8.5,
+      21.8
+    ],
+    "review-agent-23": [
+      11.0,
+      21.8
+    ],
+    "review-agent-24": [
+      13.5,
+      21.8
+    ],
+    "review-agent-25": [
+      1.0,
+      23.4
+    ],
+    "review-agent-26": [
+      3.5,
+      23.4
+    ],
+    "review-agent-27": [
+      6.0,
+      23.4
+    ],
+    "review-agent-28": [
+      8.5,
+      23.4
+    ],
+    "review-agent-29": [
+      11.0,
+      23.4
+    ],
+    "review-agent-30": [
+      13.5,
+      23.4
+    ],
+    "review-agent-31": [
+      26,
+      20.0
+    ],
+    "review-agent-32": [
+      35,
+      20.0
+    ],
+    "review-agent-33": [
+      44,
+      20.0
+    ],
+    "review-agent-34": [
+      26,
+      21.5
+    ],
+    "review-agent-35": [
+      35,
+      21.5
+    ],
+    "review-agent-36": [
+      44,
+      21.5
+    ],
+    "review-agent-37": [
+      26,
+      23.0
+    ],
+    "review-agent-38": [
+      35,
+      23.0
+    ],
+    "review-agent-39": [
+      44,
+      23.0
+    ]
+  },
+  "states": {
+    "review-agent-31": {
+      "working": true,
+      "state": "working",
+      "tool": "web.search"
+    },
+    "review-agent-32": {
+      "working": true,
+      "state": "working",
+      "tool": "shell.exec"
+    },
+    "review-agent-33": {
+      "working": true,
+      "state": "working",
+      "tool": "files.read"
+    },
+    "review-agent-34": {
+      "waiting": true,
+      "state": "waiting"
+    },
+    "review-agent-35": {
+      "waiting": true,
+      "state": "waiting"
+    }
+  }
+}

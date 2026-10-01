@@ -3,7 +3,7 @@
 'use strict';
 const OpenArtWorld = (() => {
   const hitRects=[], labels=[], outlines=new WeakMap();
-  let view=null, baseline=null, terrain=null, lookup=()=>null, lastTheme=null;
+  let view=null, terrain=null, lookup=()=>null, lastTheme=null;
   const current=()=>typeof PresentationThemes!=='undefined'?PresentationThemes.get():'original';
   const active=()=>typeof StationArt!=='undefined'&&StationArt.has(current());
   const project=(v,x,y,z)=>OSRSWorld.project(v,x,y,z);
@@ -178,14 +178,22 @@ const OpenArtWorld = (() => {
   function drawLabels(g,v,art){
     const occupied=[],font=Math.max(12,Math.min(16,v.scale*4.4));
     const family=art.model.id==='steampunk-airship'?'Georgia,"Times New Roman","Nimbus Roman",OSRSPlain,serif':'"Arial Narrow","Liberation Sans Narrow","Nimbus Sans Narrow","Helvetica Neue",Arial,OSRSPlain,sans-serif';
-    for(const {b,role,p,w,h,name}of labels){
+    const crowded=labels.length>12;
+    const order=labels.slice().sort((a,b)=>Number(!!b.b.hovered)-Number(!!a.b.hovered)||Number(!!(b.b.waiting||b.b.tool||b.b.working))-Number(!!(a.b.waiting||a.b.tool||a.b.working)));
+    for(const {b,role,p,w,h,name}of order){
+      // At station overview, idle names belong in the crew panel. Hovering still names
+      // any real NPC, and every body remains independently drawn and pickable.
+      if(crowded&&!b.hovered&&!b.waiting&&!b.tool&&!b.working)continue;
+      if(p.x+w/2<0||p.x-w/2>v.width||p.y<0||p.y-h>v.height)continue;
       g.font='600 '+font+'px '+family;const sub=role.job,width=Math.max(g.measureText(name).width,g.measureText(sub).width)+4,height=b.tool||b.waiting?44:29;
       const anchor={x:p.x+Math.min(w*.20,12),y:p.y-h-4};let chosen;
       for(const dy of [0,-32,32,-64,64])for(const x0 of [anchor.x,p.x-width-w*.15]){
         const x=Math.max(4,Math.min(v.width-width-4,x0)),y=Math.max(font+5,Math.min(v.height-height-4,anchor.y+dy)),r={x:x-2,y:y-font,w:width,h:height};
-        const cost=occupied.reduce((sum,q)=>sum+Math.max(0,Math.min(r.x+r.w,q.x+q.w)-Math.max(r.x,q.x))*Math.max(0,Math.min(r.y+r.h,q.y+q.h)-Math.max(r.y,q.y)),0)+Math.abs(dy)*.05+(x0===anchor.x?0:1);
-        if(!chosen||cost<chosen.cost)chosen={x,y,r,cost};
+        const overlap=occupied.reduce((sum,q)=>sum+Math.max(0,Math.min(r.x+r.w,q.x+q.w)-Math.max(r.x,q.x))*Math.max(0,Math.min(r.y+r.h,q.y+q.h)-Math.max(r.y,q.y)),0);
+        const cost=overlap+Math.abs(dy)*.05+(x0===anchor.x?0:1);
+        if(!chosen||cost<chosen.cost)chosen={x,y,r,cost,overlap};
       }
+      if(chosen.overlap>0&&!b.hovered)continue;
       const {x,y,r}=chosen;occupied.push(r);g.textAlign='left';g.textBaseline='bottom';g.lineWidth=3;g.strokeStyle='#060b11';
       g.font='600 '+font+'px '+family;g.strokeText(name,x,y);g.fillStyle=art.model.palette[3];g.fillText(name,x,y);
       g.font=Math.max(12,font-1)+'px '+family;g.strokeText(sub,x,y+15);g.fillStyle='#f1ede3';g.fillText(sub,x,y+15);
@@ -197,15 +205,12 @@ const OpenArtWorld = (() => {
     if(!active()||!frame.snapshot?.layout?.floor.length)return false;
     const theme=current(),art=StationArt.load(theme);if(!art?.ready)return false;
     if(lastTheme!==theme){reset();lastTheme=theme;}
-    const s=frame.snapshot,W=canvas.width,H=canvas.height,nativeScale=s.viewport?W/s.viewport.w:1;
-    const nativeCenter=s.viewport?{x:s.viewport.x+s.viewport.w/2,y:s.viewport.y+s.viewport.h/2}:null;
-    if(!baseline||baseline.layout!==s.layout||baseline.w!==W||baseline.h!==H)baseline={layout:s.layout,w:W,h:H,scale:nativeScale,center:nativeCenter};
-    const b=OSRSWorld.bounds(s.layout),center={x:b.x+b.w/2+(nativeCenter&&baseline.center?nativeCenter.x-baseline.center.x:0),y:b.y+b.h/2+(nativeCenter&&baseline.center?nativeCenter.y-baseline.center.y:0)};
-    view=OSRSWorld.makeView(s.layout,W,H,nativeScale/baseline.scale,center);hitRects.length=0;labels.length=0;
+    const s=frame.snapshot,W=canvas.width,H=canvas.height;
+    // The native viewport owns zoom, focus and pan. Theme changes only replace artwork.
+    view=OSRSWorld.makeStationView(s,W,H);hitRects.length=0;labels.length=0;
     let edges=outlines.get(s.layout);if(!edges){edges=OSRSWorld.outline(s.layout);outlines.set(s.layout,edges);}
     g.save();g.setTransform(1,0,0,1,0,0);g.globalAlpha=1;g.globalCompositeOperation='source-over';g.imageSmoothingEnabled=true;
-    g.fillStyle=art.model.palette[0];g.fillRect(0,0,W,H);
-    for(let i=0;i<90;i++){g.fillStyle=i%7?'#c7d2dc55':art.model.palette[3]+'99';g.fillRect((i*377+71)%W,(i*719+47)%H,i%7?.6:1.1,.7);}
+    OSRSWorld.drawBackdrop(g,W,H,frame.now,s.viewport);
     drawTerrain(g,view,s,edges,art);
     drawGrounding(g,view,s,edges);
     for(const belt of s.layout.belts||[])quad(g,view,belt.x,belt.y,s.layout.tileSize,s.layout.tileSize,.1,art.model.palette[1],art.model.palette[2]);
@@ -233,7 +238,7 @@ const OpenArtWorld = (() => {
     const w=Math.max(8,p.w),h=w*image.height/image.width;g.drawImage(image,p.x+p.w/2-w/2,p.y+p.h*.9-h,w,h);
     if(p.users?.length){g.strokeStyle='#edcb65';g.lineWidth=1.4;g.strokeRect(p.x-.5,p.y-.5,p.w+1,p.h+1);}return true;
   }
-  function reset(){view=null;baseline=null;terrain=null;hitRects.length=0;labels.length=0;}
+  function reset(){view=null;terrain=null;hitRects.length=0;labels.length=0;}
   return{active,draw,reset,bind:fn=>{lookup=fn||(()=>null);},clientToWorld,clientHit,worldToCanvas:(x,y)=>active()&&view?project(view,x,y):null,
     ready:()=>active()&&StationArt.ready(current()),drawPortrait,drawMapEquipment,propKind,hitRects:()=>hitRects.map(r=>({...r}))};
 })();

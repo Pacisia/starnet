@@ -3,7 +3,7 @@
 'use strict';
 const OSRSWorld = (() => {
   const assets = {}, rects = {}, hitRects = [], labels=[];
-  let view = null, baseline = null, terrain = null, lookup = () => null;
+  let view = null, terrain = null, fallbackSky = null, lookup = () => null;
   const WALL_HEIGHT=31, WALL_THICKNESS=6.5, FLOOR_DEPTH=.80;
   function alphaBounds(data,stride,left,top,w,h) {
     const visited=new Uint8Array(w*h),queue=new Int32Array(w*h),components=[];
@@ -58,8 +58,8 @@ const OSRSWorld = (() => {
     const x=Math.min(...f.map(r=>r.x)),y=Math.min(...f.map(r=>r.y));
     return {x,y,w:Math.max(...f.map(r=>r.x+r.w))-x,h:Math.max(...f.map(r=>r.y+r.h))-y};
   }
-  function makeView(layout, width, height, zoom, center) {
-    const b=bounds(layout),v={b,width,height,cx:b.x+b.w/2,cy:b.y+b.h/2,center:center||{x:b.x+b.w/2,y:b.y+b.h/2}};
+  function makeView(layout, width, height, zoom, center, profile) {
+    const b=bounds(layout),v={b,width,height,cx:b.x+b.w/2,cy:b.y+b.h/2,center:center||{x:b.x+b.w/2,y:b.y+b.h/2},overhead:!!profile?.overhead,depth:profile?.overhead?1:FLOOR_DEPTH};
     let edges=edgesCache.get(layout);if(!edges){edges=outerEdges(layout);edgesCache.set(layout,edges);}
     const points=[];
     for(const [near,list] of [[false,edges.far],[true,edges.near]])for(const [a,c] of list){
@@ -71,11 +71,41 @@ const OSRSWorld = (() => {
     v.scale=Math.min((width-16)/Math.max(1,x1-x0),(height-12)/Math.max(1,y1-y0))*Math.max(.1,zoom||1);
     v.ox=width/2-(x0+x1)/2*v.scale;v.oy=height/2-(y0+y1)/2*v.scale;return v;
   }
-  function breadth(v,y){return 1.06+.29*(y-v.b.y)/Math.max(1,v.b.h);}
-  function local(v,x,y,z) {return {x:(x-v.cx)*breadth(v,y),y:(y-v.cy)*FLOOR_DEPTH-(z||0)};}
+  function breadth(v,y){return v.overhead?1:1.06+.29*(y-v.b.y)/Math.max(1,v.b.h);}
+  function local(v,x,y,z) {return {x:(x-v.cx)*breadth(v,y),y:(y-v.cy)*(v.depth||FLOOR_DEPTH)-(z||0)};}
   function project(v,x,y,z) {const p=local(v,x,y,z),c=local(v,v.center.x,v.center.y,0);return {x:v.ox+(p.x-c.x)*v.scale,y:v.oy+(p.y-c.y)*v.scale};}
-  function unproject(v,x,y) {const c=local(v,v.center.x,v.center.y,0),wy=v.cy+((y-v.oy)/v.scale+c.y)/FLOOR_DEPTH;
+  function unproject(v,x,y) {const c=local(v,v.center.x,v.center.y,0),wy=v.cy+((y-v.oy)/v.scale+c.y)/(v.depth||FLOOR_DEPTH);
     return {x:v.cx+((x-v.ox)/v.scale+c.x)/breadth(v,wy),y:wy};}
+  // A theme changes art, not the station's camera. The native visible rectangle already
+  // includes current pan, zoom, focus and resize anchoring; use it without a new baseline.
+  function makeStationView(snapshot,width,height){
+    const r=snapshot.viewport;
+    if(!r||![r.x,r.y,r.w,r.h].every(Number.isFinite)||r.w<=0||r.h<=0)return makeView(snapshot.layout,width,height,1,null,{overhead:true});
+    const b=bounds(snapshot.layout);
+    return {b,width,height,cx:b.x+b.w/2,cy:b.y+b.h/2,center:{x:r.x+r.w/2,y:r.y+r.h/2},scale:width/r.w,ox:width/2,oy:height/2,overhead:true,depth:1};
+  }
+  function drawBackdrop(g,width,height,now,viewport){
+    const scale=viewport&&Number.isFinite(viewport.w)&&viewport.w>0?width/viewport.w:1;
+    const camera={scale,panX:viewport&&Number.isFinite(viewport.x)?-viewport.x*scale:0,panY:viewport&&Number.isFinite(viewport.y)?-viewport.y*scale:0};
+    if(typeof SpaceBG!=='undefined'&&typeof SpaceBG.draw==='function'){
+      SpaceBG.draw(g,width,height,now,camera);return;
+    }
+    // Isolated previews have no native sky module. Cache a visible starfield and nebula
+    // instead of replacing space with a flat theme palette. No entity/state data enters it.
+    const paint=(ctx,w,h)=>{
+      ctx.fillStyle='#04070e';ctx.fillRect(0,0,w,h);
+      if(typeof ctx.createRadialGradient==='function'){
+        for(const [x,y,r,color]of [[.32,.56,.65,'#12419a55'],[.66,.40,.48,'#37267650'],[.52,.68,.30,'#067c9840']]){
+          const glow=ctx.createRadialGradient(w*x,h*y,0,w*x,h*y,Math.max(w,h)*r);if(!glow||typeof glow.addColorStop!=='function')continue;glow.addColorStop(0,color);glow.addColorStop(1,'#04070e00');ctx.fillStyle=glow;ctx.fillRect(0,0,w,h);
+        }
+      }
+      for(let i=0;i<280;i++){const x=(i*377+71)%w,y=(i*719+47)%h,size=i%17?1:1.8;ctx.fillStyle=i%7?'#c5d9ee99':'#fff4c6';ctx.fillRect(x,y,size,size);}
+    };
+    if(typeof document!=='undefined'&&document.createElement){
+      if(!fallbackSky||fallbackSky.width!==width||fallbackSky.height!==height){fallbackSky=document.createElement('canvas');fallbackSky.width=width;fallbackSky.height=height;paint(fallbackSky.getContext('2d'),width,height);}
+      g.drawImage(fallbackSky,0,0);
+    }else paint(g,width,height);
+  }
   function polygon(g,points,fill,stroke,width) {
     g.beginPath();points.forEach((p,i)=>i?g.lineTo(p.x,p.y):g.moveTo(p.x,p.y));g.closePath();g.fillStyle=fill;g.fill();
     if(stroke){g.strokeStyle=stroke;g.lineWidth=width||.6;g.stroke();}
@@ -134,17 +164,9 @@ const OSRSWorld = (() => {
         // At diagonal contacts each loop keeps its own right turn, preserving separate rooms/holes.
         edge=next.find(e=>dx*(e[1].y-e[0].y)-dy*(e[1].x-e[0].x)>0)||next[0];
       }
-      // Join wall blocks across collinear tile edges, then bevel short staircase corners.
-      let merged=points.filter((p,i)=>{const a=points[(i+points.length-1)%points.length],b=points[(i+1)%points.length];return (p.x-a.x)*(b.y-p.y)!==(p.y-a.y)*(b.x-p.x);});
-      if(merged.length>3){const long=merged.findIndex((p,i)=>{const q=merged[(i+1)%merged.length];return Math.hypot(q.x-p.x,q.y-p.y)>T*1.1;});if(long>0)merged=merged.slice(long).concat(merged.slice(0,long));
-        const joined=[];for(let i=0;i<merged.length;){const p=merged[i];joined.push(p);let j=i+1,dx=0,dy=0;
-          while(j<merged.length){const a=merged[j-1],q=merged[j],sx=q.x-a.x,sy=q.y-a.y;
-            if(Math.hypot(sx,sy)>T*1.1||(sx&&dx&&Math.sign(sx)!==Math.sign(dx))||(sy&&dy&&Math.sign(sy)!==Math.sign(dy)))break;
-            dx+=sx;dy+=sy;j++;
-          }
-          i=dx&&dy&&j-i>=5?j-1:i+1;
-        }merged=joined;
-      }
+      // Join only collinear tile edges. Every native square corner, staircase and
+      // courtyard stays exact; smoothing a run into a diagonal would change the room.
+      const merged=points.filter((p,i)=>{const a=points[(i+points.length-1)%points.length],b=points[(i+1)%points.length];return (p.x-a.x)*(b.y-p.y)!==(p.y-a.y)*(b.x-p.x);});
       loops.push(merged);
       for(let i=0;i<merged.length;i++){const a=merged[i],b=merged[(i+1)%merged.length],dx=b.x-a.x,dy=b.y-a.y;
         (dy<0||dx>0?far:near).push([a,b]);}
@@ -225,17 +247,19 @@ const OSRSWorld = (() => {
     hitRects.push({kind:'agent',id:b.id,appearance:spec.look.id,atlas:kind,spriteIndex:index,wx:b.x,wy:b.y,x:p.x-w/2,y:p.y-h,w,h});
   }
   function drawLabels(g,v){
-    const occupied=[];
-    for(const l of labels){const {b,role,p,w,h,font,text,sub}=l;
+    const occupied=[],dense=labels.length>12,priority=b=>b.hovered?4:b.waiting?3:b.tool?2:b.working?1:0;
+    for(const l of [...labels].sort((a,b)=>priority(b.b)-priority(a.b))){const {b,role,p,w,h,font,text,sub}=l;
+      if(dense&&!b.hovered&&!b.waiting&&!b.tool&&!b.working)continue;
       g.font=`${font}px OSRSBold,monospace`;
       const width=Math.max(g.measureText(text).width,g.measureText(sub).width)+4,height=b.tool||b.waiting?46:31;
       const anchor={x:p.x+Math.min(w*.23,15),y:p.y-h-5};let chosen=null;
       for(const dy of [0,-34,34,-68,68,-102])for(const x0 of [anchor.x,p.x-width-w*.1]){
         const x=Math.max(4,Math.min(v.width-width-4,x0)),y=Math.max(height+4,Math.min(v.height-height-4,anchor.y+dy));
         const r={x:x-2,y:y-font,w:width,h:height};
-        const cost=occupied.reduce((sum,q)=>sum+Math.max(0,Math.min(r.x+r.w,q.x+q.w)-Math.max(r.x,q.x))*Math.max(0,Math.min(r.y+r.h,q.y+q.h)-Math.max(r.y,q.y)),0)+Math.abs(dy)*.05+(x0===anchor.x?0:1);
-        if(!chosen||cost<chosen.cost)chosen={x,y,r,cost};
+        const overlap=occupied.reduce((sum,q)=>sum+Math.max(0,Math.min(r.x+r.w,q.x+q.w)-Math.max(r.x,q.x))*Math.max(0,Math.min(r.y+r.h,q.y+q.h)-Math.max(r.y,q.y)),0),cost=overlap+Math.abs(dy)*.05+(x0===anchor.x?0:1);
+        if(!chosen||cost<chosen.cost)chosen={x,y,r,cost,overlap};
       }
+      if(!b.hovered&&chosen.overlap>0)continue;
       const {x,y,r}=chosen;occupied.push(r);
       if(Math.abs(y-anchor.y)>8){g.strokeStyle='#dfd7a944';g.lineWidth=.7;g.beginPath();g.moveTo(p.x,p.y-h);g.lineTo(x,y+5);g.stroke();}
       g.textAlign='left';g.textBaseline='bottom';g.lineWidth=3;g.strokeStyle='#15150e';g.font=`${font}px OSRSBold,monospace`;
@@ -284,13 +308,10 @@ const OSRSWorld = (() => {
   function draw(g,canvas,frame) {
     if(!active()||!frame.snapshot||!frame.snapshot.layout.floor.length)return false;
     const s=frame.snapshot,W=canvas.width,H=canvas.height;
-    const nativeScale=s.viewport?W/s.viewport.w:1,nativeCenter=s.viewport?{x:s.viewport.x+s.viewport.w/2,y:s.viewport.y+s.viewport.h/2}:null;
-    if(!baseline||baseline.layout!==s.layout||baseline.w!==W||baseline.h!==H){baseline={layout:s.layout,w:W,h:H,scale:nativeScale,center:nativeCenter};}
-    const b=bounds(s.layout),center={x:b.x+b.w/2+(nativeCenter&&baseline.center?nativeCenter.x-baseline.center.x:0),y:b.y+b.h/2+(nativeCenter&&baseline.center?nativeCenter.y-baseline.center.y:0)};
-    view=makeView(s.layout,W,H,nativeScale/baseline.scale,center);hitRects.length=0;labels.length=0;
+    const b=bounds(s.layout);
+    view=makeStationView(s,W,H);hitRects.length=0;labels.length=0;
     g.save();g.setTransform(1,0,0,1,0,0);g.globalAlpha=1;g.globalCompositeOperation='source-over';g.imageSmoothingEnabled=true;
-    g.fillStyle='#050509';g.fillRect(0,0,W,H);
-    for(let i=0;i<125;i++){const x=(i*377+71)%W,y=(i*719+47)%H;g.fillStyle=i%7?'#c8c6c46a':'#ddc385';g.fillRect(x,y,i%7?.6:1.1,.7);}
+    drawBackdrop(g,W,H,frame.now,s.viewport);
     const T=s.layout.tileSize;
     let e=edgesCache.get(s.layout);if(!e){e=outerEdges(s.layout);edgesCache.set(s.layout,e);}
     drawTerrain(g,view,s,e);
@@ -310,8 +331,8 @@ const OSRSWorld = (() => {
   function clientToWorld(e,canvas) {if(!active()||!view)return null;const p=pointFromClient(e,canvas),hit=hitPoint(p.x,p.y);return hit?{x:hit.wx,y:hit.wy}:unproject(view,p.x,p.y);}
   function worldToCanvas(x,y) {return active()&&view?project(view,x,y):null;}
   function clientHit(e,canvas) {if(!active()||!view)return null;const p=pointFromClient(e,canvas);return hitPoint(p.x,p.y);}
-  function reset(){view=null;baseline=null;terrain=null;hitRects.length=0;}
-  return {active,draw,reset,bind:fn=>{lookup=fn||(()=>null);},clientToWorld,worldToCanvas,clientHit,makeView,project,unproject,propIndex,
+  function reset(){view=null;terrain=null;hitRects.length=0;labels.length=0;}
+  return {active,draw,reset,bind:fn=>{lookup=fn||(()=>null);},clientToWorld,worldToCanvas,clientHit,makeView,makeStationView,drawBackdrop,project,unproject,propIndex,
     ready:()=>!!(rects.npc&&rects.props&&rects.travellers&&rects.armour),drawPortrait,drawMapEquipment,spriteBounds,alphaBounds,hitRects:()=>hitRects.map(r=>({...r})),bounds,outline:outerEdges};
 })();
 if(typeof StationPresentation!=='undefined')StationPresentation.registerView('osrs',OSRSWorld);

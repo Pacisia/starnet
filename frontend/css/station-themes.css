@@ -3,6 +3,9 @@
 .station-ui-picker select { max-width:175px; min-height:30px; color:var(--ph-bright); background:var(--panel,#101819); border:1px solid var(--ph-dim); border-radius:4px; padding:4px 7px; font:16px 'VT323',monospace; cursor:pointer; }
 .station-ui-picker select:focus-visible { outline:2px solid var(--ph-bright); outline-offset:3px; }
 #station-game-overview,.station-game-nav,.station-feed-tabs,#station-event-log { display:none; }
+/* Alternate views keep the style/camera controls without the native or sampled masthead. */
+body[data-station-theme]:not([data-station-theme="original"]) #screen-game #logo { display:none!important; }
+body[data-station-theme]:not([data-station-theme="original"]) #screen-game #topbar { background-image:none!important; }
 .station-theme-cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:12px 0 22px; }
 .station-theme-card { display:flex; flex-direction:column; gap:8px; text-align:left; border:1px solid var(--ph-dim); background:var(--panel); color:var(--ph-bright); padding:10px; cursor:pointer; font:16px 'VT323',monospace; border-radius:5px; }
 .station-theme-card[aria-pressed="true"] { outline:2px solid var(--ph); outline-offset:1px; }

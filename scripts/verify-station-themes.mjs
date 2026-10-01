@@ -2,7 +2,7 @@
 /* Optional real-browser integration check. Uses StarNet's existing CDP/seed helpers, an isolated
    workspace and placeholder credentials. Fixtures project events; no provider request is made. */
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
@@ -26,7 +26,13 @@ async function clickPoint(point) {
   await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });
   await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 });
 }
-const choose = id => evaluate(`(() => { const before=window.__themeCheckIdentity?.();const s=document.getElementById('station-ui-select');s.value=${JSON.stringify(id)};s.dispatchEvent(new Event('change',{bubbles:true}));return {id:PresentationThemes.get(),unchanged:before===window.__themeCheckIdentity?.()}; })()`);
+const choose = id => evaluate(`(() => { const before=window.__themeCheckIdentity?.(),camera=JSON.stringify(World.presentationSnapshot().viewport);const s=document.getElementById('station-ui-select');s.value=${JSON.stringify(id)};s.dispatchEvent(new Event('change',{bubbles:true}));return {id:PresentationThemes.get(),unchanged:before===window.__themeCheckIdentity?.(),cameraUnchanged:camera===JSON.stringify(World.presentationSnapshot().viewport)}; })()`);
+async function capture(name) {
+  if (!process.env.STARNET_THEME_SCREENSHOTS) return;
+  mkdirSync(process.env.STARNET_THEME_SCREENSHOTS, { recursive: true });
+  const result = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+  writeFileSync(join(process.env.STARNET_THEME_SCREENSHOTS, name + '.png'), Buffer.from(result.data, 'base64'));
+}
 
 try {
   const port = await freePort(), cdpPort = await freePort();
@@ -48,6 +54,7 @@ try {
     assert.ok(switched.unchanged, 'theme change preserves canonical station and roster');
     await sleep(350);
     assert.ok(await evaluate(`document.body.dataset.stationTheme===${JSON.stringify(id)}`), 'picker applies ' + id);
+    assert.ok(await evaluate(`(() => {const logo=document.getElementById('logo'),top=document.getElementById('topbar');return ${JSON.stringify(id)}==='original'?getComputedStyle(logo).display!=='none':getComputedStyle(logo).display==='none'&&getComputedStyle(top).backgroundImage==='none';})()`), 'alternate themes remove the StarNet header graphic; Original retains its logo: ' + id);
     if(await evaluate(`StationArt.has(${JSON.stringify(id)})`)){
       await waitFor(`OpenArtWorld.ready()&&OpenArtWorld.hitRects().some(r=>r.kind==='agent')`, 'approved artwork and live entities ready: '+id);
       assert.ok(await evaluate(`document.body.dataset.stationArt==='openart'&&document.body.style.getPropertyValue('--station-art-brand').includes('data:image/png')`),'reference client surfaces loaded');
@@ -56,6 +63,25 @@ try {
       await clickPoint(point);await waitFor(`!!document.querySelector('.term.dossier')`,'approved-art NPC opens existing dossier');await evaluate(`StationUI.closeTerm('agents');StationThemeUI.nav('station')`);
     }
   }
+  // The default Mac app window is materially smaller than the reference artwork.
+  // Check actual DOM bounds rather than inferring them from an isolated canvas preview.
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1024, height: 640, deviceScaleFactor: 1, mobile: false });
+  const illustrated = await evaluate(`PresentationThemes.catalog.filter(t=>StationArt.has(t.id)).map(t=>t.id)`);
+  for (const id of illustrated) {
+    const switched = await choose(id);
+    assert.ok(switched.cameraUnchanged, 'theme switching does not reset the native camera synchronously: ' + id);
+    await waitFor(`OpenArtWorld.ready()&&OpenArtWorld.hitRects().some(r=>r.kind==='agent')`, 'compact illustrated station ready: ' + id);
+    await sleep(700);
+    assert.ok(await evaluate(`(() => {const bar=document.getElementById('bottombar'),b=bar.getBoundingClientRect(),tabs=document.querySelector('.osrs-client-tabs').getBoundingClientRect(),controls=[...bar.querySelectorAll('.bb-grp'),...bar.querySelectorAll('.osrs-chat-filters button')];return controls.length===10&&controls.every(el=>{const r=el.getBoundingClientRect();return r.width>20&&r.height>20&&r.left>=b.left-1&&r.right<=b.right+1&&r.top>=b.top-1&&r.bottom<=b.bottom+1&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1&&!(r.left<tabs.right&&r.right>tabs.left&&r.top<tabs.bottom&&r.bottom>tabs.top);})&&b.bottom<=innerHeight+1&&document.documentElement.scrollWidth<=innerWidth;})()`), 'compact footer keeps all native menus and filters inside the viewport without icon-dock overlap: ' + id);
+    assert.ok(await evaluate(`(() => {const p=document.getElementById('station-ui-select'),r=p.getBoundingClientRect(),style=getComputedStyle(p);return r.width>100&&r.height>20&&r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight&&style.visibility==='visible'&&style.pointerEvents!=='none';})()`), 'compact header style control remains available: ' + id);
+    assert.ok(await evaluate(`(() => {const rail=document.getElementById('station-game-overview'),style=getComputedStyle(rail);if(!['auto','scroll'].includes(style.overflowY)||rail.scrollHeight<=rail.clientHeight)return false;rail.scrollTop=rail.scrollHeight;const entries=[...rail.querySelectorAll('.station-crew-entry')],r=entries.at(-1)?.getBoundingClientRect(),b=rail.getBoundingClientRect(),visible=r&&r.height>20&&r.top>=b.top&&r.bottom<=b.bottom-46;rail.scrollTop=0;return visible;})()`), 'compact crew rail scrolls to its last real agent without collapsing rows: ' + id);
+    if (id === 'space-colony') await capture('space-colony-desktop-1024x640');
+  }
+  await choose('osrs');
+  await waitFor(`OSRSWorld.ready()&&OSRSWorld.hitRects().some(r=>r.kind==='agent')`, 'compact OSRS station ready');
+  await sleep(700); await capture('osrs-desktop-1024x640');
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1536, height: 1024, deviceScaleFactor: 1, mobile: false });
+  await sleep(700);
   await choose('osrs');
   await waitFor(`typeof OSRSWorld!=='undefined'&&OSRSWorld.ready()&&OSRSWorld.hitRects().some(r=>r.kind==='agent')`, 'perspective assets and real entities ready');
   assert.ok(await evaluate(`(() => {const s=World.presentationSnapshot();return Object.isFrozen(s)&&Object.isFrozen(s.bodies)&&Object.isFrozen(s.bodies[0])&&Object.isFrozen(s.layout.floor)&&Object.isFrozen(s.equipment[0].users);})()`), 'projection is immutable');
@@ -122,7 +148,7 @@ try {
   assert.ok(await evaluate(`!document.getElementById('osrs-appearance').open`),'returning to Original closes the theme-specific picker');
   assert.ok(await evaluate(`getComputedStyle(document.getElementById('station-game-overview')).display==='none'&&!document.getElementById('chat-panel').classList.contains('station-activity-selected')`), 'original restores native UI');
   assert.deepEqual(errors, [], 'no browser exceptions');
-  console.log('station-themes browser: eight styles, five approved-art renderers, unchanged canonical state, NPC/equipment picking, live rune/dragon armour, persistence, activity, Settings and phone layout passed; no provider calls');
+  console.log('station-themes browser: eight styles, alternate-header removal, five compact desktop layouts with visible controls and scrollable crew, unchanged canonical state, NPC/equipment picking, live rune/dragon armour, persistence, activity, Settings and phone layout passed; no provider calls');
 } finally {
   if (cdp) { try { await cdp.send('Browser.close'); } catch {} }
   for (const p of [chrome, server]) { if (p && p.exitCode == null) p.kill('SIGKILL'); }
