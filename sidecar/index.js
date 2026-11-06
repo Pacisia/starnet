@@ -11680,7 +11680,12 @@ async function handleConnectorOauthStart(req, res) {
     let clientId = cachedClient.clientId || '';
     let clientSecret = cachedClient.clientSecret || '';
     let tokenEndpointAuthMethod = cachedClient.tokenEndpointAuthMethod || requiredAuthMethod;
-    if (!clientId || tokenEndpointAuthMethod !== requiredAuthMethod || (requiredAuthMethod !== 'none' && !clientSecret)) {
+    // The desktop shell gives the sidecar a fresh random port every launch, so the loopback redirect changes too.
+    // Servers that match redirect_uri exactly (e.g. OpenArt) reject a client registered under an older port with
+    // "redirect_uri is not registered", so re-register whenever the cached client was minted for another redirect
+    // (or predates this field).
+    const redirectChanged = !!clientId && cachedClient.redirectUri !== CONNECTOR_OAUTH_REDIRECT;
+    if (!clientId || redirectChanged || tokenEndpointAuthMethod !== requiredAuthMethod || (requiredAuthMethod !== 'none' && !clientSecret)) {
       if (!disc.registrationEndpoint) return json(502, { error: 'this server needs a pre-registered OAuth client (no dynamic registration)' });
       const reg = await mcpOauth.registerClient({ fetchImpl: connectorOauthFetch, registrationEndpoint: disc.registrationEndpoint,
         redirectUri: CONNECTOR_OAUTH_REDIRECT, clientName: 'StarNet', tokenEndpointAuthMethod: requiredAuthMethod,
@@ -11692,7 +11697,7 @@ async function handleConnectorOauthStart(req, res) {
       // the clientId is still valid in-memory for this flow, and a failed cache only costs a re-registration next
       // time (harmless — a fresh DCR client), unlike a lost token which forces a full re-sign-in.
       const nextClientState = connectorStateMod.withOauthClient(connectorStateMod.envelope(connectorConfigs, connectorOauth), disc.authorizationServer,
-        { clientId: clientId, clientSecret: clientSecret, tokenEndpointAuthMethod: tokenEndpointAuthMethod, at: Date.now() });
+        { clientId: clientId, clientSecret: clientSecret, tokenEndpointAuthMethod: tokenEndpointAuthMethod, redirectUri: CONNECTOR_OAUTH_REDIRECT, at: Date.now() });
       if (persistConnectorState(nextClientState.configs, nextClientState.oauth)) adoptConnectorState(nextClientState);
       else console.warn('[connectors] DCR clientId cache not persisted for ' + disc.authorizationServer + ' — a later sign-in will re-register a fresh client.');
     }
